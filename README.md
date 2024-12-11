@@ -33,11 +33,11 @@ To enter parameters and specify the location of the target files and primer's fi
 
 > **config.file**
 ```
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_008690.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_011731.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_013019.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_008847.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NC_000002.txt
+target_path=C:\PCRpanel\test\NG_008690.txt
+target_path=C:\PCRpanel\test\NG_011731.txt
+target_path=C:\PCRpanel\test\NG_013019.txt
+target_path=C:\PCRpanel\test\NG_008847.txt
+target_path=C:\PCRpanel\test\NC_000002.txt
 
 target_primers=C:\PCRpanel\test\primers.txt
 
