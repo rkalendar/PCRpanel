@@ -1,5 +1,5 @@
 ## PCRpanel 
-## Custom Amplicon Panels Designer is a tool for Amplicon Sequencing Technology, an ultra-high multiplex tiling PCR sequencing approach targeted DNA sequencing technology for next-generation sequencing (NGS) and nanopore sequencing (ONT).
+## Custom Amplicon Panels Designer is a tool for Amplicon Sequencing Technology, an ultra-high multiplex tiling PCR sequencing approach targeted DNA sequencing technology for Next-Generation Sequencing (NGS) and Nanopore sequencing (ONT).
 
 By Ruslan Kalendar 
 
@@ -55,10 +55,24 @@ reversetail=GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAG
 
 ```
 ## Specifies the coordinates of exons to be analyzed:
-In the Genbank file, you must replace "mRNA" with "Panel" to indicate exon coordinates or any other target fragments to the program.
+In the Genbank file ("FEATURES"), you must replace "mRNA" with "Panel" to indicate exon coordinates or other target fragments to the software.
 
 ```
 Panel            join(1..519,5421..5620,11239..11503,13230..13465,
                      34397..34557,40011..40143,43883..44077,45866..45984,
                      57668..58629)
 ```
+For example:
+
+https://www.ncbi.nlm.nih.gov/nuccore/NG_011731.2?from=4823&to=28767&report=genbank
+
+     mRNA            join(179..527,10266..10465,14953..15139,15597..15838,
+                     17695..17846,17974..18175,18907..19098,20701..20822,
+                     20916..21060,22498..23945)
+
+replaced by:
+
+     Panel           join(179..527,10266..10465,14953..15139,15597..15838,
+                     17695..17846,17974..18175,18907..19098,20701..20822,
+                     20916..21060,22498..23945)
+                     
