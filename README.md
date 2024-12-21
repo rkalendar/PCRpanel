@@ -57,13 +57,7 @@ reversetail=GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAG
 ## Specifies the coordinates of exons to be analyzed:
 In the Genbank file ("FEATURES"), you must replace "mRNA" with "Panel" to indicate exon coordinates or other target fragments to the software.
 
-```
-Panel            join(1..519,5421..5620,11239..11503,13230..13465,
-                     34397..34557,40011..40143,43883..44077,45866..45984,
-                     57668..58629)
-```
 For example:
-
 https://www.ncbi.nlm.nih.gov/nuccore/NG_011731.2?from=4823&to=28767&report=genbank
 
      mRNA            join(179..527,10266..10465,14953..15139,15597..15838,
