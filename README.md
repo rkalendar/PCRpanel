@@ -54,10 +54,11 @@ forwardtail=TCGTCGGCAGCGTCAGATGTGTATAAGAGACAG
 reversetail=GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAG
 
 ```
+## Specifies the coordinates of exons to be analyzed:
+In the Genbank file, you must replace "mRNA" with "Panel" to indicate exon coordinates or any other target fragments to the program.
 
-
-## The output is saved in tab-delimited, plain text files. 
-
-
-
-
+```
+Panel            join(1..519,5421..5620,11239..11503,13230..13465,
+                     34397..34557,40011..40143,43883..44077,45866..45984,
+                     57668..58629)
+```
