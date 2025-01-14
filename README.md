@@ -50,8 +50,8 @@ maxTm=62
 minLC=78
 3end=w
 5end=
-forwardtail=TCGTCGGCAGCGTCAGATGTGTATAAGAGACAG
-reversetail=GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAG
+forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT
+reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 
 ```
 ## Specifies the coordinates of exons to be analyzed:
