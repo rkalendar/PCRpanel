@@ -1,14 +1,13 @@
 target_path=C:\MyPrograms\Java\PCRpanel\test\NG_008690.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_011731.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_013019.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_008847.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NC_000002.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_011591.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_011977.txt
-target_path=C:\MyPrograms\Java\PCRpanel\test\NG_012059.txt
+target_path=C:\PCRpanel\test\NG_011731.txt
+target_path=C:\PCRpanel\test\NG_013019.txt
+target_path=C:\PCRpanel\test\NG_008847.txt
+target_path=C:\PCRpanel\test\NC_000002.txt
+target_path=C:\PCRpanel\test\NG_011591.txt
+target_path=C:\PCRpanel\test\NG_011977.txt
+target_path=C:\PCRpanel\test\NG_012059.txt
 
-
-target_primers=C:\MyPrograms\Java\PCRpanel\test\primers.txt
+target_primers=C:\PCRpanel\test\primers.txt
 
 minPCR=50
 maxPCR=500
@@ -22,4 +21,13 @@ minLC=80
 forwardtail=TCGTCGGCAGCGTCAGATGTGTATAAGAGACAG
 reversetail=GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAG
 
+see about primer tails:
+https://teichlab.github.io/scg_lib_structs/methods_html/Illumina.html
 
+Truseq Single Index Library:
+Forward Primer Tail: 5'-ACACTCTTTCCCTACACGACGCTCTTCCGATCT-3'
+Reverse Primer Tail: 5'-GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT-3'
+
+Example of dual-indexing primers (i5/i7):
+i5 (P5 region): AATGATACGGCGACCACCGAGATCTACAC[index]ACACTCTTTCCCTACACGACG
+i7 (P7 region): CAAGCAGAAGACGGCATACGAGAT[index]GTGACTGGAGTTCAGACGTGT
