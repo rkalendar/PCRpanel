@@ -41,7 +41,7 @@ target_path=C:\PCRpanel\test\NC_000002.txt
 
 target_primers=C:\PCRpanel\test\primers.txt
 
-minPCR=50
+minPCR=250
 maxPCR=500
 minLen=18
 maxLen=24
