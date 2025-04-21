@@ -1,5 +1,5 @@
 ## PCRpanel 
-## Custom Amplicon Panels Designer is a tool for Amplicon Sequencing Technology, an ultra-high multiplex tiling PCR sequencing approach targeted DNA sequencing technology for Next-Generation Sequencing (NGS) and Nanopore sequencing (ONT).
+## Custom Amplicon Panels Designer is a professional tool for amplicon sequencing technology, an ultra-high multiplex tiling PCR sequencing approach targeting DNA sequencing technology for Next-Generation Sequencing (NGS) and Nanopore sequencing (ONT).
 
 By Ruslan Kalendar 
 
