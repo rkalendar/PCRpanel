@@ -57,7 +57,7 @@ reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 ## Specifies the coordinates of exons to be analyzed:
 In the Genbank file ("FEATURES"), you must replace "mRNA" with "Panel" to indicate exon coordinates or other target fragments to the software.
 
-For example (Homo sapiens HNF1 homeobox A):
+Example: Homo sapiens HNF1 homeobox A: 
 https://www.ncbi.nlm.nih.gov/nuccore/NG_011731.2?from=4823&to=28767&report=genbank
 
      mRNA            join(179..527,10266..10465,14953..15139,15597..15838,
@@ -70,12 +70,18 @@ replaced by:
                      17695..17846,17974..18175,18907..19098,20701..20822,
                      20916..21060,22498..23945)
 
-For example 2 (Severe acute respiratory syndrome coronavirus 2):
+
+Example: Severe acute respiratory syndrome coronavirus 2: 
 https://www.ncbi.nlm.nih.gov/nuccore/MZ410617
+
 For whole-genome tiling, it is necessary to specify the coordinates for developing a panel for the entire length of the virus genome. 
+
 Insert the following line under the ("FEATURES") in this file:
 
+```
 FEATURES             Location/Qualifiers
-
      Panel           join(1..29842)
-    
+```    
+
+The target sequence is not limited by the presence of exons, as in the example with the HNF1 gene. Anyone can specify any coordinates and any number of them for any target sequence. The user can independently specify any coordinates on any sequence, as shown in this example. 
+
