@@ -221,6 +221,10 @@ public class apanel {
                                 exonsBuilder.append(line.substring(x + 5));
                             }
                             readingExons = 1;
+                            x = line.indexOf(")");
+                            if (x > 0) {
+                                readingExons = 0;
+                            }
                         }
 
                         if (isOriginSection) {
@@ -326,7 +330,17 @@ public class apanel {
                 }
             }
             listprimers2 = stringList.toArray(String[]::new);
-
+            /*
+            // pcrcol - here all pairs list with exons ID
+            if (!pcrcol.isEmpty()) {
+                sr1.append("List all amplicons:\n");
+                for (Pair pcrx : pcrcol) {
+                    sr1.append(pcrx.fprimername).append("\t").append(pcrx.fprimer).append("\t").append(pcrx.fln).append("\t").append(String.format("%.1f", pcrx.fTm)).append("\t").append(String.format("%.1f", pcrx.fCG)).append("\t").append(pcrx.flc).append("\n");
+                    sr1.append(pcrx.rprimername).append("\t").append(pcrx.rprimer).append("\t").append(pcrx.rln).append("\t").append(String.format("%.1f", pcrx.rTm)).append("\t").append(String.format("%.1f", pcrx.fCG)).append("\t").append(pcrx.rlc).append("\n");
+                    sr1.append("ExonID:").append((1 + pcrx.exonid)).append(" PCR amplicon=").append(pcrx.pcrsize).append(" bp\n\n");
+                }
+            }
+             */
             PrimersCollector[] fPrimersList = pd.getpForwardPrimers();
             PrimersCollector[] rPrimersList = pd.getpReversePrimers();
             int h = -1;
