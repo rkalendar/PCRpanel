@@ -77,7 +77,7 @@ https://www.ncbi.nlm.nih.gov/nuccore/MZ410617
 
 For whole-genome tiling, it is necessary to specify the coordinates for developing a panel for the entire length of the virus genome. 
 
-Insert the following line under the ("FEATURES") in this the Genbank file:
+Insert the following line ("Panel join(1..29842)") under the ("FEATURES") in this the Genbank file:
 
 ```
 FEATURES             Location/Qualifiers
