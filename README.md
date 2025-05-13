@@ -1,6 +1,8 @@
 ## PCRpanel 
 ## Custom Amplicon Panels Designer is a professional tool for amplicon sequencing technology, an ultra-high multiplex tiling PCR sequencing approach targeting DNA sequencing technology for Next-Generation Sequencing (NGS) and Nanopore sequencing (ONT).
 
+The scope of this application is not limited to multiplex tiling PCR. Any sequence, of any length, and any number of target sequences can be used. There are no restrictions on the size of amplicons or their number, and standard PCR tasks for multiplex applications can be performed. In the target sequence, only the coordinates for analysis need to be specified; these can be exons, introns, or absolutely any task. The user can develop PCR sets based on an existing list of primers or probes from previously developed panels or for other purposes. Non-specific tails for primers can be added during the primer design stage. 
+
 By Ruslan Kalendar 
 
 email: ruslan.kalendar@helsinki.fi
