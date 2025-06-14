@@ -75,7 +75,7 @@ replaced by:
 ## Specifies the coordinates for developing a panel for the entire length:
 
 Example: Severe acute respiratory syndrome coronavirus 2: 
-https://www.ncbi.nlm.nih.gov/nuccore/MZ410617
+https://www.ncbi.nlm.nih.gov/nuccore/NC_045512.2
 
 For whole-genome tiling, it is necessary to specify the coordinates for developing a panel for the entire length of the virus genome. 
 
