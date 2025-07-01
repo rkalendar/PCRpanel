@@ -7,6 +7,8 @@ By Ruslan Kalendar
 
 email: ruslan.kalendar@helsinki.fi
 
+Online version: https://primerdigital.com/tools/pcr.html
+
 ## Availability and requirements:
 
 Operating system(s): Platform independent
@@ -17,10 +19,6 @@ Programming language: Java 24 or higher
 
 
 How do I set or change [the Java path system variable](https://www.java.com/en/download/help/path.html)
-
-
-Online version: https://primerdigital.com/tools/pcr.html
-
 
 To run the project from the command line. Command-line options, separated by spaces. 
 The executive file ```PCRpanel.jar``` is in the ```dist``` directory, which can be copied to any location. 
