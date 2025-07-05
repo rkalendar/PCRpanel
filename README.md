@@ -7,7 +7,7 @@ By Ruslan Kalendar
 
 email: ruslan.kalendar@helsinki.fi
 
- [Online version:](https://primerdigital.com/tools/panel.html)
+ [Online version](https://primerdigital.com/tools/panel.html)
 
 ## Availability and requirements:
 
