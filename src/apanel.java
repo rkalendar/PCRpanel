@@ -1,13 +1,15 @@
 import java.io.IOException;
 import java.io.FileReader;
 import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
 public class apanel {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         if (args.length > 0) {
             String[] primers = new String[0];
             String primerfile = "";
@@ -19,8 +21,12 @@ public class apanel {
                 }
             }
 
+            List<String> Sequences = new ArrayList<>();
+            List<String> NameSequences = new ArrayList<>();
+            List<String> ExonsSequences = new ArrayList<>();
             List<String> tagfiles = new ArrayList<>();
             List<String> tagprimers = new ArrayList<>();
+            List<String> reffiles = new ArrayList<>();
 
             int minpcr = 60;
             int maxpcr = 600;
@@ -28,12 +34,13 @@ public class apanel {
             int maxtm = 62;
             int minlen = 18;
             int maxlen = 25;
-            int prlap = 12; //12-18
-            int minlc = 78;
+            int prlap = 12; //0-18
+            int minlc = 70;
             String e5 = "n";
             String e3 = "w";
             String ftail = "";
             String rtail = "";
+            Boolean homology = false;
 
             System.out.println("Current Directory: " + System.getProperty("user.dir"));
             System.out.println("Command-line arguments:");
@@ -42,6 +49,10 @@ public class apanel {
                 while ((line = br.readLine()) != null) {
                     line = line.toLowerCase();
 
+                    if (line.contains("homology=true")) { 
+                        homology = true;
+                        System.out.println("Designing common primers only based on shared sequences between different files.");
+                    }
                     if (line.contains("3end=")) {
                         e3 = line.substring(5);
                         System.out.println("3End=" + e3);
@@ -60,6 +71,11 @@ public class apanel {
                         tagfiles.add(s);
                         System.out.println("Target_path=" + s);
                     }
+                    if (line.contains("reference_path=")) {
+                        String s = line.substring(15);
+                        reffiles.add(s);
+                        System.out.println("Reference_path=" + s);
+                    }
                     if (line.contains("forwardtail=")) {
                         String s = dna.DNA(line.substring(12));
                         ftail = s;
@@ -69,17 +85,6 @@ public class apanel {
                         String s = dna.DNA(line.substring(12));
                         rtail = s;
                         System.out.println("ReverseTail=" + s);
-                    }
-                    if (line.contains("minlc=")) {
-                        int h = StrToInt(line.substring(3));
-                        System.out.println(line);
-                        if (h < 20) {
-                            h = 20;
-                        }
-                        if (h > 90) {
-                            h = 90;
-                        }
-                        minlc = h;
                     }
                     if (line.contains("minpcr=")) {
                         int h = StrToInt(line.substring(7));
@@ -98,8 +103,8 @@ public class apanel {
                         if (h < 30) {
                             h = 30;
                         }
-                        if (h > 5000) {
-                            h = 5000;
+                        if (h > 50000) {
+                            h = 50000;
                         }
                         maxpcr = h;
                     }
@@ -151,7 +156,7 @@ public class apanel {
             } catch (IOException e) {
             }
 
-            // Reading file with primers list
+// Reading file with primers list
             if (primerfile.length() > 1) {
                 try (BufferedReader bufferedReader = new BufferedReader(new FileReader(primerfile))) {
                     String line;
@@ -176,11 +181,41 @@ public class apanel {
                 }
             }
 
-            // Reading target file(s), one by one
+// Reading reference FASTA file(s), one by one
+            String refsequence = ""; // FASTA sequence for repeated blocks identification
+            if (!reffiles.isEmpty()) {
+                for (String reffile : reffiles) {
+                    try (BufferedReader bufferedReader = new BufferedReader(
+                            new InputStreamReader(
+                                    reffile.endsWith(".gz")
+                                    ? new java.util.zip.GZIPInputStream(new FileInputStream(reffile))
+                                    : new FileInputStream(reffile),
+                                    java.nio.charset.StandardCharsets.UTF_8), 1 << 16)) {
+
+                        String line;
+                        StringBuilder sequenceBuilder = new StringBuilder(1 << 20);
+
+                        while ((line = bufferedReader.readLine()) != null) {
+                            if (line.isEmpty()) {
+                                continue;
+                            }
+                            if (line.charAt(0) == '>') {
+                            } else {
+                                sequenceBuilder.append(line);
+                            }
+                        }
+                        refsequence = refsequence + dna.DNA(sequenceBuilder.toString());
+                    }
+                }
+            }
+
+// Reading target file(s), one by one
+            int nseq = 0;
             for (String tagfile : tagfiles) {
                 try (BufferedReader bufferedReader = new BufferedReader(new FileReader(tagfile))) {
                     String line;
                     String name = "";
+                    nseq++;
 
                     StringBuilder exonsBuilder = new StringBuilder();
                     StringBuilder sequenceBuilder = new StringBuilder();
@@ -190,16 +225,18 @@ public class apanel {
 
                     while ((line = bufferedReader.readLine()) != null) {
                         line = line.trim().toLowerCase();
-                        if (line.contains("locus")) {
-                            String[] parts = line.split(" ");
-                            int n = 0;
-                            for (String part : parts) {
-                                String a = part.trim();
-                                if (a.length() > 0) {
-                                    n++;
-                                    name = a.toUpperCase();
-                                    if (n > 1) {
-                                        break;
+                        if (name.length() == 0) {
+                            if (line.contains("locus")) {
+                                String[] parts = line.split(" ");
+                                int n = 0;
+                                for (String part : parts) {
+                                    String a = part.trim();
+                                    if (a.length() > 0) {
+                                        n++;
+                                        name = a.toUpperCase();
+                                        if (n > 1) {
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -235,36 +272,76 @@ public class apanel {
                         }
                     }
 
-                    String exons = exonsBuilder.toString();
-                    String sequence = sequenceBuilder.toString();
+                    Sequences.add(dna.DNA(sequenceBuilder.toString()));
+                    ExonsSequences.add(exonsBuilder.toString());
+                    NameSequences.add(name);
 
-                    if (!sequence.isEmpty() && !exons.isEmpty()) {
-                        String[] p = exons.split(",");
-                        int[] v = new int[2 * p.length];
-                        int n = -1;
-                        for (String p1 : p) {
-                            String[] r = p1.split("\\.");
-                            if (r.length > 1) {
-                                v[++n] = StrToInt(r[0]);
-                                v[++n] = StrToInt(r[2]);
-                            }
-                        }
-                        String[] newlistprimers = Run(tagfile, sequence, name, primers, v, minpcr, maxpcr, minlen, maxlen, mintm, maxtm, minlc, prlap, ftail, rtail, e5, e3);
-                        // Combine the primers with new set of primers
-                        primers = combineArrays(primers, newlistprimers);
-                    }
                 } catch (IOException e) {
                 }
             }
+
+//Running file by file            
+            for (int i = 0; i < nseq; i++) {
+                String exons = ExonsSequences.get(i);
+                String sequence = Sequences.get(i);
+                String name = NameSequences.get(i);
+                String tagfile = tagfiles.get(i);
+
+                if (!sequence.isEmpty() && !exons.isEmpty()) {
+                    String[] p = exons.split(",");
+                    int[] v = new int[2 * p.length];
+                    int n = -1;
+                    for (String p1 : p) {
+                        String[] r = p1.split("\\.");
+                        if (r.length > 1) {
+                            v[++n] = StrToInt(r[0]);
+                            v[++n] = StrToInt(r[2]);
+                        }
+                    }
+
+                    String ref = "";
+                    int totalLen = ref.length();
+                    for (int j = 0; j < nseq; j++) {
+                        if (j == i) {
+                            continue;
+                        }
+                        String s = Sequences.get(j);
+                        if (s != null) {
+                            totalLen += s.length();
+                        }
+                    }
+                    StringBuilder sb = new StringBuilder(totalLen);
+                    sb.append(ref);
+                    for (int j = 0; j < nseq; j++) {
+                        if (j == i) {
+                            continue;
+                        }
+                        String s = Sequences.get(j);
+                        if (s != null) {
+                            sb.append(s);
+                        }
+                    }
+                    String[] newlistprimers = Run(tagfile, sequence, name, refsequence, sb.toString(), homology, primers, v, minpcr, maxpcr, minlen, maxlen, mintm, maxtm, minlc, prlap, ftail, rtail, e5, e3);
+                    // Combine the primers with new set of primers
+                    primers = combineArrays(primers, newlistprimers);
+                }
+
+            }
+
         }
     }
 
-    private static String[] Run(String tagfile, String seq, String name, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) {
+    private static String[] Run(String tagfile, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) {
         String primerlistfile = tagfile + "_primers.txt";
         String pcrcolfile = tagfile + "_panels.txt";
         String panelprimerlistfile = tagfile + "_panelprimers.txt";
         String[] listprimers2 = null;
+        int[] cexons = exons.clone();
 
+        /*   ExonsDesigner pex = new ExonsDesigner(minpcr, maxpcr);
+        List<ExonsDesigner.PcrFragment> fr = pex.buildPcrFragments(cexons);
+        fr.forEach(System.out::println);
+         */
         try {
             StringBuilder sr = new StringBuilder(100000);
             StringBuilder sr1 = new StringBuilder(100000);
@@ -275,6 +352,9 @@ public class apanel {
             System.out.println("\nTarget file name: " + tagfile);
 
             sr.append("Target file name: ").append(tagfile).append("\n");
+            if (homology) {
+                sr.append("Designing common primers only based on shared sequences between different files.\n");
+            }
             sr.append("min PCR size=").append(minpcr).append("\n");
             sr.append("max PCR size=").append(maxpcr).append("\n");
             sr.append("min Tm=").append(mintm).append("\n");
@@ -296,7 +376,7 @@ public class apanel {
                 sr.append("Reverse tail=").append(rtail).append("\n");
             }
 
-            PrimerDesign pd = new PrimerDesign(dna.DNA(seq), name, minlen, maxlen, mintm, maxtm, minlc, exons, listprimers);
+            PrimerDesign pd = new PrimerDesign(seq, name, minlen, maxlen, mintm, maxtm, minlc, exons, listprimers, refsequence, fastaseq, homology);
             List<Pair> pcrcol = pd.RunDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
 
             PanelsCollector panels = new PanelsCollector(pcrcol);
@@ -307,6 +387,7 @@ public class apanel {
 
             if (!pcrpanel1.isEmpty()) {
                 sr1.append("Panel1:\n");
+                sr1.append("Name\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)\n");
                 for (Pair pcrx : pcrpanel1) {
                     stringList.add(pcrx.fprimer);
                     stringList.add(pcrx.rprimer);
@@ -319,6 +400,7 @@ public class apanel {
             }
             if (!pcrpanel2.isEmpty()) {
                 sr1.append("Panel2:\n");
+                sr1.append("Name\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)\n");
                 for (Pair pcrx : pcrpanel2) {
                     stringList.add(pcrx.fprimer);
                     stringList.add(pcrx.rprimer);
@@ -344,15 +426,20 @@ public class apanel {
             PrimersCollector[] fPrimersList = pd.getpForwardPrimers();
             PrimersCollector[] rPrimersList = pd.getpReversePrimers();
             int h = -1;
+            sr.append("\nName\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)");
             for (int j = 0; j < exons.length - 1; j += 2) {
                 h++;
-                sr.append("\n").append("exon:").append(h + 1).append(" ").append(exons[j]).append("-").append(exons[j + 1]).append(" ").append(exons[j + 1] - exons[j] + 1).append("bp\n");
-                System.out.println("\nexon:" + (h + 1) + " " + exons[j] + "-" + exons[j + 1] + " " + (exons[j + 1] - exons[j] + 1) + "bp");
+                if (exons[j] < 0) {
+                    sr.append("\n").append("exon:").append(h + 1).append(" ").append(cexons[j]).append("-").append(cexons[j + 1]).append(" (").append(cexons[j + 1] - cexons[j] + 1).append("bp) join with ").append(-exons[j]).append("\n");
+                    System.out.println("\nexon:" + (h + 1) + " " + cexons[j] + "-" + cexons[j + 1] + " (" + (cexons[j + 1] - cexons[j] + 1) + "bp) join with " + (-exons[j]));
+                } else {
+                    sr.append("\n").append("exon:").append(h + 1).append(" ").append(exons[j]).append("-").append(exons[j + 1]).append(" ").append(exons[j + 1] - exons[j] + 1).append("bp\n");
+                    System.out.println("\nexon:" + (h + 1) + " " + exons[j] + "-" + exons[j + 1] + " (" + (exons[j + 1] - exons[j] + 1) + "bp)");
+                }
 
                 PrimersCollector fPrimersList1 = fPrimersList[h];
                 if (fPrimersList1.Amount() > 0) {
                     StringBuilder sr2 = new StringBuilder(100000);
-                    sr2.append("Forward:\n");
                     double[] Tm = fPrimersList1.getTms();
                     double[] CG = fPrimersList1.getCGs();
                     int[] ln = fPrimersList1.getPrimerLengths();          // length
@@ -360,10 +447,10 @@ public class apanel {
                     // int[] x1 = fPrimersList1.getPrimerLocations();        // location x1
                     String[] primer = fPrimersList1.getPrimer();          // primer sequence
                     String[] primername = fPrimersList1.getpPrimerName(); // name
+
                     for (int i = 0; i < fPrimersList1.Amount(); i++) {
                         sr2.append(primername[i]).append("\t").append(primer[i]).append("\t").append(ln[i]).append("\t").append(String.format("%.1f", Tm[i])).append("\t").append(String.format("%.1f", CG[i])).append("\t").append(lc[i]).append("\n");
                     }
-                    sr2.append("\n");
                     System.out.println(sr2);
                     sr.append(sr2);
                 }
@@ -371,22 +458,19 @@ public class apanel {
                 PrimersCollector rPrimersList1 = rPrimersList[h];
                 if (fPrimersList1.Amount() > 0) {
                     StringBuilder sr2 = new StringBuilder(100000);
-                    sr2.append("Reverse:\n");
                     double[] Tm = rPrimersList1.getTms();
                     double[] CG = rPrimersList1.getCGs();
                     int[] ln = rPrimersList1.getPrimerLengths();          // length
                     int[] lc = rPrimersList1.getPrimerLC();               // Linguistic_Complexity
-                    //  int[] x1 = rPrimersList1.getPrimerLocations();    // location x1
+                    //  int[] x1 = rPrimersList1.getPrimerLocations();        // location x1
                     String[] primer = rPrimersList1.getPrimer();          // primer sequence
                     String[] primername = rPrimersList1.getpPrimerName(); //name
                     for (int i = 0; i < rPrimersList1.Amount(); i++) {
                         sr2.append(primername[i]).append("\t").append(primer[i]).append("\t").append(ln[i]).append("\t").append(String.format("%.1f", Tm[i])).append("\t").append(String.format("%.1f", CG[i])).append("\t").append(lc[i]).append("\n");
                     }
-                    sr2.append("\n");
                     System.out.println(sr2);
                     sr.append(sr2);
                 }
-
             }
 
             long duration = (System.nanoTime() - startTime) / 1000000000;
@@ -394,7 +478,7 @@ public class apanel {
             try (FileWriter fileWriter = new FileWriter(primerlistfile)) {
                 System.out.println("Saving the primer list report to a file: " + primerlistfile);
                 fileWriter.write(sr.toString());
-                fileWriter.write("Time taken: " + duration + " seconds\n\n");
+                //    fileWriter.write("\nTime taken: " + duration + " seconds\n\n");
             }
 
             if (!pcrpanel1.isEmpty()) {
