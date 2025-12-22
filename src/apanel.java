@@ -361,7 +361,6 @@ public class apanel {
             sr.append("max Tm=").append(maxtm).append("\n");
             sr.append("min length=").append(minlen).append("\n");
             sr.append("min length=").append(maxlen).append("\n");
-            sr.append("Linguistic Complexity(%)=").append(minlc).append("\n");
 
             if (e3.length() > 0) {
                 sr.append("3-end=").append(e3).append("\n");
