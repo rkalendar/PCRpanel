@@ -15,7 +15,6 @@ minLen=18
 maxLen=24
 minTm=60
 maxTm=62
-minLC=80
 3end=w
 5end=
 forwardtail=TCGTCGGCAGCGTCAGATGTGTATAAGAGACAG
