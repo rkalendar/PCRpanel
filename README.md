@@ -334,17 +334,13 @@ java -Xmx4g -jar PCRpanel.jar config.file
 
 ---
 
-## License
-
-*[Add license information here]*
-
 ---
 
 ## Citation
 
 If you use PCRpanel in your research, please cite:
 
-*[Add citation information here]*
+**
 
 ---
 
