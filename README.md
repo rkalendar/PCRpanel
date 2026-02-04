@@ -128,7 +128,7 @@ All parameters are specified in a plain-text configuration file.
 | `maxLen` | Maximum primer length (nt) | `24` |
 | `minTm` | Minimum melting temperature (°C) | `60` |
 | `maxTm` | Maximum melting temperature (°C) | `62` |
-| `minLC` | Minimum linguistic complexity (%) | `78` |
+| `minLC` | Minimum linguistic complexity (%) | `80` |
 | `3end` | 3′ end constraint | `w` |
 | `5end` | 5′ end constraint | *(empty)* |
 | `forwardtail` | 5′ adapter for forward primers | Illumina P5 adapter |
