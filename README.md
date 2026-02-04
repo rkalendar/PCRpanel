@@ -343,12 +343,7 @@ If you use PCRpanel in your research, please cite:
 **
 
 ---
-
-## Contributing
-
-Contributions are welcome! Please submit issues and pull requests to the project repository.
-
----
+ 
 
 <p align="center">
   <i>PCRpanel — Designed for researchers, by researchers</i>
