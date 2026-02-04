@@ -1,60 +1,73 @@
-## PCRpanel 
-## Custom Amplicon Panels Designer is a professional tool for amplicon sequencing technology, an ultra-high multiplex tiling PCR sequencing approach targeting DNA sequencing technology for Next-Generation Sequencing (NGS) and Nanopore sequencing (ONT).
+# PCRpanel — Custom Amplicon Panel Designer
 
-The scope of this application is not limited to multiplex tiling PCR. Any sequence, of any length, and any number of target sequences can be used. There are no restrictions on the size of amplicons or their number, and standard PCR tasks for multiplex applications can be performed. In the target sequence, only the coordinates for analysis need to be specified; these can be exons, introns, or absolutely any task. The user can develop PCR sets based on an existing list of primers or probes from previously developed panels or for other purposes. Non-specific tails for primers can be added during the primer design stage. 
+PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (ONT)**, including **ultra‑high multiplex tiling PCR** and standard singleplex/multiplex PCR tasks.
 
-By Ruslan Kalendar 
+**Online version:** https://primerdigital.com/tools/panel.html  
+**Author:** Ruslan Kalendar  
+**Contact:** ruslan.kalendar@helsinki.fi
 
-email: ruslan.kalendar@helsinki.fi
+---
 
- [Online version](https://primerdigital.com/tools/panel.html)
+## Key capabilities
+- Multiplex tiling PCR and conventional PCR primer design
+- Works with **any sequence length** and **any number of targets**
+- Target regions can be **exons, introns, promoters, or arbitrary coordinates**
+- Can design primers starting from **existing primer/probe lists**
+- Supports optional **5′/3′ tails** (adapters, UMIs, etc.) during design
 
-## Availability and requirements:
+---
 
-Operating system(s): Platform independent
+## Availability and requirements
+- **OS:** Platform independent  
+- **Java:** 25 or higher
 
-Programming language: Java 25 or higher
+Java downloads:
+- https://www.oracle.com/java/technologies/downloads/
 
-[Java Downloads](https://www.oracle.com/java/technologies/downloads/)
+How to set/change JAVA_HOME / PATH:
+- https://www.java.com/en/download/help/path.html
 
+---
 
-How do I set or change [the Java path system variable](https://www.java.com/en/download/help/path.html)
-
-## Installing Java using Conda
-To install a specific version of OpenJDK using Conda, you need to specify the version number in your installation command and use the conda-forge channel. The latest version is available on the conda-forge channel.
-1. Add the conda-forge channel (if not already added). It is recommended to add the conda-forge channel to your configuration and set its priority to strict to ensure packages are preferentially installed from this channel:
-   
-```conda config --add channels conda-forge```
-
-```conda config --set channel_priority strict```
-
-2. Create a new Conda environment and install the desired OpenJDK version. Creating a dedicated environment helps manage dependencies and avoid conflicts with other projects:
-
-```conda create -n java25 openjdk=25```
-
-3. Activate the new environment:
-
-```conda activate java25```
-
-4. Check if you have Java installed. The output should display information for the installed Java version:
-
-```java -version```
-
-To run the project from the command line. Command-line options, separated by spaces. 
-The executive file ```PCRpanel.jar``` is in the ```dist``` directory, which can be copied to any location. 
-Go to the target folder and type the following; an individual file or a file folder can be specified:
-
-```
-java -jar <PCRpanelPath>\dist\PCRpanel.jar <PCRpanelPath>\test\config.file
-
-java -jar C:\PCRpanel\dist\PCRpanel.jar C:\PCRpanel\test\config.file 
+## Installing Java 25 with Conda (optional)
+1) Add conda-forge and set strict priority:
+```bash
+conda config --add channels conda-forge
+conda config --set channel_priority strict
 ```
 
-### Basic usage: 
-To enter parameters and specify the location of the target files and primer's file, you must specify this via a file on the command line. An example of such a file here (file name or extension does not matter):
-
-> **config.file**
+2) Create an environment and install OpenJDK 25:
+```bash
+conda create -n java25 openjdk=25
+conda activate java25
 ```
+
+3) Verify:
+```bash
+java -version
+```
+
+---
+
+## Running from the command line
+The executable JAR is **`PCRpanel.jar`** in the **`dist`** directory. Copy it anywhere and run:
+
+```bash
+java -jar <PCRpanelPath>/dist/PCRpanel.jar <config.file>
+```
+
+Example (Windows):
+```bash
+java -jar C:\PCRpanel\dist\PCRpanel.jar C:\PCRpanel\test\config.file
+```
+
+---
+
+## Basic usage (config file)
+Parameters and input paths are provided via a plain text config file:
+
+**config.file**
+```ini
 target_path=C:\PCRpanel\test\NG_008690.txt
 target_path=C:\PCRpanel\test\NG_011731.txt
 target_path=C:\PCRpanel\test\NG_013019.txt
@@ -70,41 +83,106 @@ maxLen=24
 minTm=60
 maxTm=62
 minLC=78
+
 3end=w
 5end=
+
 forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT
 reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
-
 ```
-## Specifies the coordinates of exons to be analyzed:
-In the Genbank file ("FEATURES"), you must replace "mRNA" with "Panel" to indicate exon coordinates or other target fragments to the software.
 
-Example: Homo sapiens HNF1 homeobox A: 
-https://www.ncbi.nlm.nih.gov/nuccore/NG_011731.2?from=4823&to=28767&report=genbank
+---
 
-     mRNA            join(179..527,10266..10465,14953..15139,15597..15838,
-                     17695..17846,17974..18175,18907..19098,20701..20822,
-                     20916..21060,22498..23945)
 
-replaced by:
 
-     Panel           join(179..527,10266..10465,14953..15139,15597..15838,
-                     17695..17846,17974..18175,18907..19098,20701..20822,
-                     20916..21060,22498..23945)
+### Batch processing: per-file vs folder input, and output folder control
+You can provide **individual files** (repeat `target_path=` multiple times) **or** point to a **folder** that contains multiple targets.
 
-## Specifies the coordinates for developing a panel for the entire length:
+**Input folder:**
+```ini
+folder_path=C:\PCRpanel\test\
+```
 
-Example: Severe acute respiratory syndrome coronavirus 2: 
+**Output folder:**
+```ini
+folder_out=C:\PCRpanel\report\
+```
+
+If `folder_out` is **not specified**, PCRpanel writes results into the **same directory as each input target file** (i.e., the directory of the `target_path=` file).  
+If you use `folder_path` and `folder_out` is not specified, results are written into that **input folder**.
+
+> When both `target_path` and `folder_path` are provided, PCRpanel should treat the final input set as the **union** of all listed files plus all files discovered in `folder_path`.
+
+
+## Input formats
+PCRpanel accepts:
+- **GenBank flat files** (recommended): `*.gb`, `*.gbff`, RefSeqGene/RefSeq records (often downloaded with `rettype=gbwithparts`)
+- **FASTA**: one or multiple records per file
+
+If a GenBank file does not contain an `ORIGIN` sequence section (or sequence extraction fails), PCRpanel can fall back to FASTA parsing when the input is FASTA-formatted.
+
+---
+
+## Target regions and exon recognition for PCR design
+PCRpanel designs primers **only within target coordinates**. These target coordinates can be derived automatically from GenBank annotations or specified as arbitrary regions.
+
+### Coordinates are extracted from GenBank FEATURES
+GenBank coordinate rules that matter:
+- Locations are **1-based, inclusive** (e.g., `5049..5095` includes both ends).
+- Locations can be wrapped by:
+  - `join(...)` for multi-exon features
+  - `order(...)` (treated like join for target extraction)
+  - `complement(...)` (strand information; coordinates are still extracted normally)
+- Partial bounds can be written as `<123..456` or `123..>456` (PCRpanel should treat `<`/`>` as the numeric position).
+
+### What PCRpanel should recognize as “exons”
+Many RefSeq/GenBank records **do not** contain explicit `exon` features. Instead, exon blocks are encoded inside transcript features.
+
+Recommended recognition priority for exon-like blocks:
+1. **`exon`** features (if present)
+2. Transcript features with joined locations:
+   - **`mRNA`**, **`ncRNA`**, **`rRNA`**, **`tRNA`** (use their `join(...)` blocks as exons)
+3. **`CDS`** (use its `join(...)` blocks as coding exons when transcript features are absent)
+4. Fallback: if nothing is annotated, use the **full sequence** as one target region
+
+This is the most robust strategy across RefSeqGene (NG_*), genomic (NC_*), and transcript records.
+
+### Examples of exon-bearing locations
+From the FEATURES table:
+
+**mRNA with exons**:
+```
+mRNA            join(5049..5095,26596..26643,30691..30834,46554..46688)
+```
+
+**CDS on reverse strand**:
+```
+CDS             complement(join(330..403,1050..1120))
+```
+
+The extracted target blocks are the individual intervals inside `join(...)`.
+
+### Coordinate conversion (implementation note)
+If your internal representation uses 0-based half-open coordinates (common in Java arrays),
+convert GenBank intervals `a..b` to:
+- `start = a - 1`
+- `end   = b`   (end exclusive)
+
+For example, `5049..5095` → `[5048, 5095)` (length 47).
+
+---
+
+## Whole-genome tiling panels (no exons)
+Example: SARS-CoV-2 (NC_045512.2)  
 https://www.ncbi.nlm.nih.gov/nuccore/NC_045512.2
 
-For whole-genome tiling, it is necessary to specify the coordinates for developing a panel for the entire length of the virus genome. 
+For whole-genome tiling, the “target region” is simply the entire genome length. PCRpanel can design tiled amplicons across the full sequence, independent of exon annotations.
 
-Insert the following line ("Panel join(1..29842)") under the ("FEATURES") in this the Genbank file:
+---
 
-```
-FEATURES             Location/Qualifiers
-     Panel           join(1..29842)
-```    
-
-The target sequence is not limited by the presence of exons, as in the example with the HNF1 gene. Anyone can specify any coordinates and any number of them for any target sequence. 
+## Troubleshooting notes
+- If no exons/targets are detected from FEATURES, verify:
+  - The record contains a **FEATURES** table and an **ORIGIN** sequence
+  - Transcript features use `join(...)` (common for multi-exon genes)
+- If you supply FASTA, PCRpanel should treat each FASTA record as a separate target (full-length region).
 
