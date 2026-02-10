@@ -151,11 +151,11 @@ All parameters are specified in a plain-text configuration file.
 
 ```ini
 # Target sequences (multiple files supported)
-target_path=C:\PCRpanel\test\NG_008690.txt
-target_path=C:\PCRpanel\test\NG_011731.txt
-target_path=C:\PCRpanel\test\NG_013019.txt
-target_path=C:\PCRpanel\test\NG_008847.txt
-target_path=C:\PCRpanel\test\NC_000002.txt
+target_path=C:\PCRpanel\test\NG_013019.gb
+target_path=C:\PCRpanel\test\NG_011731.gb
+target_path=C:\PCRpanel\test\NG_013019.gb
+target_path=C:\PCRpanel\test\NG_008847.gb
+target_path=C:\PCRpanel\test\NC_000002.gb
 
 # Optional: existing primers to incorporate
 target_primers=C:\PCRpanel\test\primers.txt
@@ -216,7 +216,7 @@ folder_out=C:\PCRpanel\report\
 
 ### GenBank Files
 
-**Recommended format.** Supported extensions: `*.gb`, `*.gbff`
+**Recommended (not strict) format.** Supported extensions: `*.gb`, `*.gbff`
 
 PCRpanel parses RefSeqGene/RefSeq records (typically downloaded with `rettype=gbwithparts`). The file must contain:
 
@@ -241,9 +241,9 @@ Many RefSeq/GenBank records lack explicit `exon` features. PCRpanel uses the fol
 
 | Priority | Feature Type | Notes |
 |----------|--------------|-------|
-| 1 | `exon` | Used directly if present |
-| 2 | `mRNA`, `ncRNA`, `rRNA`, `tRNA` | `join(...)` blocks extracted as exons |
-| 3 | `CDS` | `join(...)` blocks used when transcript features are absent |
+| 1 | `exon` | Used directly if present (Important and main feature)|
+| 2 | `mRNA`, `ncRNA`, `rRNA`, `tRNA` | `join(...)` blocks extracted as exons (currently suspended) |
+| 3 | `CDS` | `join(...)` blocks used when transcript features are absent (currently suspended)|
 | 4 | *Fallback* | Full sequence treated as one target region |
 
 This strategy works across RefSeqGene (`NG_*`), genomic (`NC_*`), and transcript records.
