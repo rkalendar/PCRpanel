@@ -1,4 +1,3 @@
-
 import java.nio.file.*;
 import java.io.IOException;
 import java.io.FileReader;
@@ -59,12 +58,12 @@ public class apanel {
                     String cline = line;
                     line = line.toLowerCase();
 
-//Path file = validatePath(line, "input_file=", false);  // файл
-//Path dir = validatePath(line, "reference_path=", true); // директория
+//Path file = validatePath(line, "input_file=", false);  // file
+//Path dir = validatePath(line, "reference_path=", true); // directory
                     Path outDir = validatePath(cline, "folder_path=", true);
                     if (outDir != null) {
                         String s = cline.substring(12);
-                        System.out.println("Folder_path=" + s);                        // Reading target file(s), one by one
+                        System.out.println("Folder_path=" + s);    // Reading target file(s), one by one
                         String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
                         tagfiles.addAll(List.of(files));
                     }
@@ -72,7 +71,8 @@ public class apanel {
                     Path inputFile = validatePath(cline, "target_path=", false);
                     if (inputFile != null) {
                         System.out.println("Input file= " + inputFile);
-                        tagfiles.addAll(List.of(inputFile.toString()));
+                    //    tagfiles.addAll(List.of(inputFile.toString()));
+                        tagfiles.add(inputFile.toString()); 
                     }
 
                     outDir = validatePath(cline, "genome_path=", true);
