@@ -33,6 +33,7 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 - [Use Cases](#use-cases)
   - [Gene Panel Design](#gene-panel-design)
   - [Whole-Genome Tiling](#whole-genome-tiling-panels)
+- [Related Tools](#related-tools)
 - [Troubleshooting](#troubleshooting)
 - [Citation](#citation)
 - [License](#license)
@@ -45,9 +46,8 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 - Works with **any sequence length** and **any number of targets**
 - Target regions can be **exons, introns, promoters, or arbitrary coordinates**
 - Design primers starting from **existing primer/probe lists**
-- If necessary, connect the reference genome to check for gene duplication and unknown repeats.
+- Optionally align against a **reference genome** to check for gene duplications and unknown repeats
 - Supports optional **5′/3′ tails** (adapters, UMIs, barcodes, etc.)
-
 
 ---
 
@@ -218,7 +218,7 @@ folder_out=C:\PCRpanel\report\
 
 ### GenBank Files
 
-**Recommended (not strict) format.** Supported extensions: `*.gb`, `*.gbff`
+**Recommended (but not strictly required) format.** Supported extensions: `*.gb`, `*.gbff`
 
 PCRpanel parses RefSeqGene/RefSeq records (typically downloaded with `rettype=gbwithparts`). The file must contain:
 
@@ -241,12 +241,14 @@ PCRpanel designs primers **only within target coordinates**. These can be derive
 
 Many RefSeq/GenBank records lack explicit `exon` features. PCRpanel uses the following recognition hierarchy:
 
-| Priority | Feature Type | Notes |
-|----------|--------------|-------|
-| 1 | `exon` | Used directly if present (Important and main feature)|
-| 2 | `mRNA`, `ncRNA`, `rRNA`, `tRNA` | `join(...)` blocks extracted as exons (currently suspended) |
-| 3 | `CDS` | `join(...)` blocks used when transcript features are absent (currently suspended)|
-| 4 | *Fallback* | Full sequence treated as one target region |
+| Priority | Feature Type | Status | Notes |
+|----------|--------------|--------|-------|
+| 1 | `exon` | **Active** | Used directly if present (primary feature) |
+| 2 | `mRNA`, `ncRNA`, `rRNA`, `tRNA` | *Suspended* | `join(...)` blocks extracted as exons |
+| 3 | `CDS` | *Suspended* | `join(...)` blocks used when transcript features are absent |
+| 4 | *Fallback* | **Active** | Full sequence treated as one target region |
+
+> **Note:** Priorities 2 and 3 are currently suspended. At present, only explicit `exon` features (priority 1) and the full-sequence fallback (priority 4) are active.
 
 This strategy works across RefSeqGene (`NG_*`), genomic (`NC_*`), and transcript records.
 
@@ -312,10 +314,12 @@ PCRpanel designs tiled amplicons across the full sequence, independent of exon a
 
 ---
 
-If you need a long list of gene abbreviations or GenBank accessions, you can use this tool - NCBI RefSeq GenBank Downloader:
-<https://github.com/rkalendar/genbanktools>
+## Related Tools
+
+**[NCBI RefSeq GenBank Downloader](https://github.com/rkalendar/genbanktools)** — Batch-download GenBank records by gene abbreviation or accession number. Useful when assembling large target lists for PCRpanel.
 
 ---
+
 ## Troubleshooting
 
 ### No exons/targets detected
