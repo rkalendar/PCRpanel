@@ -39,7 +39,7 @@ public class FastaIO {
      *
      * @param reffiles list of paths to files
      * @param sink handler function for each record
-
+     *
      */
     public static void readFastaStreaming(List<String> reffiles, Consumer<FastaRecord> sink) throws IOException {
         if (reffiles == null || reffiles.isEmpty()) {
@@ -74,7 +74,7 @@ public class FastaIO {
                         id = header.isEmpty() ? "" : header.split("\\s+", 2)[0];
                     } else {
                         if (header == null) {
-                            throw new IOException("Error on line " + lineNumber + " в файле " + path + ": sequence found before header '>'");
+                            throw new IOException("Error on line " + lineNumber + " in the file " + path + ": sequence found before header '>'");
                         }
                         appendSequence(sb, line);
                     }
@@ -87,7 +87,6 @@ public class FastaIO {
             }
         }
     }
-
 
     /**
      * Convenient method: reads all entries in LinkedHashMap (preserves order).
@@ -146,8 +145,8 @@ public class FastaIO {
      *
      * @param records list of records to write
      * @param outputPath path to the output file
-     * @param lineWidth line width for formatting the sequence
-     * (usually 60 or 80)
+     * @param lineWidth line width for formatting the sequence (usually 60 or
+     * 80)
      */
     public static void writeFasta(List<FastaRecord> records, String outputPath, int lineWidth) throws IOException {
         try (BufferedWriter writer = new BufferedWriter(
@@ -170,6 +169,7 @@ public class FastaIO {
 
     /**
      * Entry with a default line width of 80 characters
+     *
      * @param records
      * @param outputPath
      */
@@ -190,21 +190,21 @@ public class FastaIO {
         for (int i = 0, n = line.length(); i < n; i++) {
             char c = line.charAt(i);
             if (c >= 'A' && c <= 'Z') {
-                char u = (char) (c - 32); // toLowerCase for ASCII
+                char u = (char) (c + 32); // toLowerCase for ASCII
                 if (u == 'U') {
                     u = 't';
                 }
                 if (u == 'I') {
                     u = 'g';
                 }
-                
+
                 sb.append(u);
             } else if (c >= 'a' && c <= 'z') {
                 char u = c;
                 if (u == 'U') {
                     u = 't';
                 }
-                                                if (u == 'i') {
+                if (u == 'i') {
                     u = 'g';
                 }
                 sb.append(u);
