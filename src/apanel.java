@@ -1,3 +1,4 @@
+
 import java.nio.file.*;
 import java.io.IOException;
 import java.io.FileReader;
@@ -58,7 +59,6 @@ public class apanel {
                     String cline = line;
                     line = line.toLowerCase();
 
-//Path file = validatePath(line, "input_file=", false);  // file
 //Path dir = validatePath(line, "reference_path=", true); // directory
                     Path outDir = validatePath(cline, "folder_path=", true);
                     if (outDir != null) {
@@ -67,14 +67,6 @@ public class apanel {
                         String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
                         tagfiles.addAll(List.of(files));
                     }
-
-                    Path inputFile = validatePath(cline, "target_path=", false);
-                    if (inputFile != null) {
-                        System.out.println("Input file= " + inputFile);
-                    //    tagfiles.addAll(List.of(inputFile.toString()));
-                        tagfiles.add(inputFile.toString()); 
-                    }
-
                     outDir = validatePath(cline, "genome_path=", true);
                     if (outDir != null) {
                         System.out.println("Genome_path=\"" + outDir);
@@ -82,7 +74,6 @@ public class apanel {
                         String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
                         genomefiles = List.of(files);
                     }
-
                     outDir = validatePath(cline, "folder_out=", true);
                     if (outDir != null) {
                         int i = cline.indexOf("folder_out=");
@@ -92,11 +83,16 @@ public class apanel {
                         System.out.println("Output dir ready: " + outDir);
                         outpath = outDir.toString();
                     }
-
-                    outDir = validatePath(cline, "reference_path=", true);
-                    if (outDir != null) {
+    //Path file = validatePath(line, "input_file=", false);  // file                
+                    Path inputFile = validatePath(cline, "target_path=", false);
+                    if (inputFile != null) {
+                        System.out.println("Input file= " + inputFile);
+                        tagfiles.add(inputFile.toString());
+                    }
+                    inputFile = validatePath(cline, "reference_path=", false);//a single file
+                    if (inputFile != null) {
                         System.out.println("Reference_path= " + outDir);
-                        reffiles.add(outDir.toString());
+                        reffiles.add(inputFile.toString());
                     }
 
                     if (line.contains("homology=true")) {
@@ -833,40 +829,31 @@ public class apanel {
         if (!line.toLowerCase().contains(key.toLowerCase())) {
             return null;
         }
-
         int i = line.toLowerCase().indexOf(key.toLowerCase());
         String pathStr = line.substring(i + key.length()).trim();
         pathStr = stripQuotes(pathStr);
-
         if (pathStr.isEmpty()) {
             return null;
         }
-
         try {
             Path path = Paths.get(pathStr);
-
             if (!Files.exists(path)) {
                 System.err.println("Error: Path does not exist: " + path);
                 return null;
             }
-
             if (isDirectory && !Files.isDirectory(path)) {
                 System.err.println("Error: Path is not a directory: " + path);
                 return null;
             }
-
             if (!isDirectory && !Files.isRegularFile(path)) {
                 System.err.println("Error: Path is not a file: " + path);
                 return null;
             }
-
             if (!Files.isReadable(path)) {
                 System.err.println("Error: No read permission: " + path);
                 return null;
             }
-
             return path;
-
         } catch (Exception e) {
             System.err.println("Error processing path: " + e.getMessage());
             return null;
