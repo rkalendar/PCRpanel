@@ -45,7 +45,9 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 - Works with **any sequence length** and **any number of targets**
 - Target regions can be **exons, introns, promoters, or arbitrary coordinates**
 - Design primers starting from **existing primer/probe lists**
+- If necessary, connect the reference genome to check for gene duplication and unknown repeats.
 - Supports optional **5′/3′ tails** (adapters, UMIs, barcodes, etc.)
+
 
 ---
 
