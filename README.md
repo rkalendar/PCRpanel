@@ -139,9 +139,10 @@ All parameters are specified in a plain-text configuration file.
 | Parameter | Description |
 |-----------|-------------|
 | `target_path` | Path to individual target file (can be repeated) |
-| `target_primers` | Path to existing primer/probe list |
-| `folder_path` | Path to folder containing multiple target files |
-| `folder_out` | Output directory for results |
+| `target_primers` | (optional) Path to existing primer/probe list |
+| `folder_path` | (optional) Path to the folder containing the multiple target files, including subdirectories|
+| `folder_out` | (optional) Output directory for results |
+| `genome_path=` | (optional) Path to the folder containing the multiple target genome chromosome FASTA files, including subdirectories|
 
 **Example Configuration File:**
 
@@ -177,6 +178,12 @@ reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 ```
 
 ### Batch Processing
+
+**Specifying refernces genome directory (Optional):**
+
+```ini
+genome_path=C:\PCRpanel\HumanChromosomes\
+```
 
 **Using a folder for input:**
 
