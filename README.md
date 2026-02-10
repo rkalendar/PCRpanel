@@ -312,6 +312,10 @@ PCRpanel designs tiled amplicons across the full sequence, independent of exon a
 
 ---
 
+If you need a long list of gene abbreviations or GenBank accessions, you can use this tool - NCBI RefSeq GenBank Downloader:
+<https://github.com/rkalendar/genbanktools>
+
+---
 ## Troubleshooting
 
 ### No exons/targets detected
