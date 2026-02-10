@@ -3,10 +3,10 @@
 [![Java](https://img.shields.io/badge/Java-25%2B-orange)](https://www.oracle.com/java/technologies/downloads/)
 [![Platform](https://img.shields.io/badge/Platform-Independent-blue)]()
 
-PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (ONT)**, including **ultra-high multiplex tiling PCR** and standard singleplex/multiplex PCR tasks.
+PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (ONT)**, including **ultra-high multiplex tiling PCR** and standard singleplex/multiplex PCR tasks. It accepts GenBank or FASTA input, automatically detects target regions (exons, introns, promoters, or arbitrary coordinates), and outputs optimised primer sets ready for wet-lab validation.
 
-🌐 **Online version:** https://primerdigital.com/tools/panel.html  
-👤 **Author:** Ruslan Kalendar  
+🌐 **Online version:** <https://primerdigital.com/tools/panel.html>
+👤 **Author:** Ruslan Kalendar
 📧 **Contact:** ruslan.kalendar@helsinki.fi
 
 ---
@@ -22,6 +22,7 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 - [Configuration Reference](#configuration-reference)
   - [Basic Parameters](#basic-parameters)
   - [Input/Output Paths](#inputoutput-paths)
+  - [Batch Processing](#batch-processing)
 - [Input Formats](#input-formats)
   - [GenBank Files](#genbank-files)
   - [FASTA Files](#fasta-files)
@@ -33,6 +34,7 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
   - [Gene Panel Design](#gene-panel-design)
   - [Whole-Genome Tiling](#whole-genome-tiling-panels)
 - [Troubleshooting](#troubleshooting)
+- [Citation](#citation)
 - [License](#license)
 
 ---
@@ -51,12 +53,13 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 
 | Requirement | Details |
 |-------------|---------|
-| **Operating System** | Platform independent (Windows, macOS, Linux) |
+| **Operating System** | Platform-independent (Windows, macOS, Linux) |
 | **Java** | Version 25 or higher |
 
 **Java Downloads:**
-- Oracle JDK: https://www.oracle.com/java/technologies/downloads/
-- Setting JAVA_HOME/PATH: https://www.java.com/en/download/help/path.html
+
+- Oracle JDK: <https://www.oracle.com/java/technologies/downloads/>
+- Setting JAVA_HOME/PATH: <https://www.java.com/en/download/help/path.html>
 
 ---
 
@@ -64,9 +67,9 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 
 ### Standard Installation
 
-1. Download or clone this repository
-2. Ensure Java 25+ is installed and available in your PATH
-3. The executable JAR is located at `dist/PCRpanel.jar`
+1. Download or clone this repository.
+2. Ensure Java 25+ is installed and available in your `PATH`.
+3. The executable JAR is located at `dist/PCRpanel.jar`.
 
 ### Installing Java 25 with Conda (Optional)
 
@@ -138,11 +141,11 @@ All parameters are specified in a plain-text configuration file.
 
 | Parameter | Description |
 |-----------|-------------|
-| `target_path` | Path to individual target file (can be repeated) |
-| `target_primers` | (optional) Path to existing primer/probe list |
-| `folder_path` | (optional) Path to the folder containing the multiple target files, including subdirectories|
-| `folder_out` | (optional) Output directory for results |
-| `genome_path=` | (optional) Path to the folder containing the multiple target genome chromosome FASTA files, including subdirectories|
+| `target_path` | Path to an individual target file (can be repeated) |
+| `target_primers` | *(Optional)* Path to an existing primer/probe list |
+| `folder_path` | *(Optional)* Path to a folder containing multiple target files, including subdirectories |
+| `folder_out` | *(Optional)* Output directory for results |
+| `genome_path` | *(Optional)* Path to a folder containing reference genome chromosome FASTA files, including subdirectories |
 
 **Example Configuration File:**
 
@@ -179,7 +182,7 @@ reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 
 ### Batch Processing
 
-**Specifying refernces genome directory (Optional):**
+**Specifying a reference genome directory (optional):**
 
 ```ini
 genome_path=C:\PCRpanel\HumanChromosomes\
@@ -191,13 +194,13 @@ genome_path=C:\PCRpanel\HumanChromosomes\
 folder_path=C:\PCRpanel\test\
 ```
 
-**Specifying output directory:**
+**Specifying an output directory:**
 
 ```ini
 folder_out=C:\PCRpanel\report\
 ```
 
-**Output behavior:**
+**Output behaviour:**
 
 | Configuration | Output Location |
 |---------------|-----------------|
@@ -224,7 +227,7 @@ PCRpanel parses RefSeqGene/RefSeq records (typically downloaded with `rettype=gb
 
 Standard FASTA format with one or multiple records per file. Each FASTA record is treated as a separate target (full-length region).
 
-> **Fallback behavior:** If a GenBank file lacks an ORIGIN sequence section, PCRpanel attempts FASTA parsing.
+> **Fallback behaviour:** If a GenBank file lacks an ORIGIN sequence section, PCRpanel attempts FASTA parsing.
 
 ---
 
@@ -234,25 +237,25 @@ PCRpanel designs primers **only within target coordinates**. These can be derive
 
 ### Exon Recognition Priority
 
-Many RefSeq/GenBank records lack explicit `exon` features. PCRpanel uses this recognition hierarchy:
+Many RefSeq/GenBank records lack explicit `exon` features. PCRpanel uses the following recognition hierarchy:
 
 | Priority | Feature Type | Notes |
 |----------|--------------|-------|
 | 1 | `exon` | Used directly if present |
 | 2 | `mRNA`, `ncRNA`, `rRNA`, `tRNA` | `join(...)` blocks extracted as exons |
-| 3 | `CDS` | `join(...)` blocks used when transcript features absent |
+| 3 | `CDS` | `join(...)` blocks used when transcript features are absent |
 | 4 | *Fallback* | Full sequence treated as one target region |
 
-This strategy works across RefSeqGene (NG_\*), genomic (NC_\*), and transcript records.
+This strategy works across RefSeqGene (`NG_*`), genomic (`NC_*`), and transcript records.
 
 ### GenBank Coordinate Rules
 
-- Locations are **1-based, inclusive** (e.g., `5049..5095` includes both endpoints)
+- Locations are **1-based, inclusive** (e.g., `5049..5095` includes both endpoints).
 - Supported location wrappers:
   - `join(...)` — multi-exon features
-  - `order(...)` — treated like join for target extraction
-  - `complement(...)` — indicates reverse strand; coordinates extracted normally
-- Partial bounds (`<123..456` or `123..>456`) — the `<`/`>` symbols are ignored; numeric position is used
+  - `order(...)` — treated like `join` for target extraction
+  - `complement(...)` — indicates reverse strand; coordinates are extracted normally
+- Partial bounds (`<123..456` or `123..>456`) — the `<`/`>` symbols are ignored; the numeric position is used.
 
 **Examples from FEATURES tables:**
 
@@ -301,7 +304,7 @@ minPCR=400
 maxPCR=500
 ```
 
-Reference: https://www.ncbi.nlm.nih.gov/nuccore/NC_045512.2
+Reference: <https://www.ncbi.nlm.nih.gov/nuccore/NC_045512.2>
 
 PCRpanel designs tiled amplicons across the full sequence, independent of exon annotations.
 
@@ -311,13 +314,11 @@ PCRpanel designs tiled amplicons across the full sequence, independent of exon a
 
 ### No exons/targets detected
 
-**Check the following:**
+1. Verify the GenBank record contains both a **FEATURES** table and an **ORIGIN** sequence section.
+2. Ensure transcript features use `join(...)` syntax (required for multi-exon genes).
+3. Check that the file encoding is correct (UTF-8 recommended).
 
-1. The GenBank record contains both a **FEATURES** table and an **ORIGIN** sequence section
-2. Transcript features use `join(...)` syntax (required for multi-exon genes)
-3. File encoding is correct (UTF-8 recommended)
-
-### FASTA fallback behavior
+### FASTA fallback behaviour
 
 If you supply FASTA input, each record is treated as a separate full-length target region. No exon-level targeting is available without GenBank annotations.
 
@@ -329,11 +330,11 @@ Ensure Java 25+ is installed:
 java -version
 ```
 
-If multiple Java versions are installed, verify `JAVA_HOME` points to the correct version.
+If multiple Java versions are installed, verify that `JAVA_HOME` points to the correct version.
 
 ### Memory issues with large genomes
 
-For large genomes, increase Java heap size:
+For large genomes, increase the Java heap size:
 
 ```bash
 java -Xmx4g -jar PCRpanel.jar config.file
@@ -341,17 +342,24 @@ java -Xmx4g -jar PCRpanel.jar config.file
 
 ---
 
----
-
 ## Citation
 
 If you use PCRpanel in your research, please cite:
 
-**
+> Kalendar, R. (2025). PCRpanel: Custom Amplicon Panel Designer. Available at <https://primerdigital.com/tools/panel.html>
+
+<!-- TODO: Replace the citation above with the published paper reference once available. -->
 
 ---
- 
+
+## License
+
+This project is distributed under the terms of the [MIT License](LICENSE).
+
+<!-- TODO: Update with the correct licence type if different. -->
+
+---
 
 <p align="center">
-  <i>PCRpanel — Designed for researchers, by researchers</i>
+  <em>PCRpanel — Designed for researchers, by researchers</em>
 </p>
