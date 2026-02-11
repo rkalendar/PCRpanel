@@ -63,13 +63,13 @@ public class apanel {
                     Path outDir = validatePath(cline, "folder_path=", true);
                     if (outDir != null) {
                         String s = cline.substring(12);
-                        System.out.println("Folder_path=" + s);    // Reading target file(s), one by one
+                        System.out.println("Target_Folder_path=" + s);    // Reading target file(s), one by one
                         String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
                         tagfiles.addAll(List.of(files));
                     }
                     outDir = validatePath(cline, "genome_path=", true);
                     if (outDir != null) {
-                        System.out.println("Genome_path=\"" + outDir);
+                        System.out.println("Genome_path=" + outDir);
                         String s = cline.substring(12);
                         String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
                         genomefiles = List.of(files);
@@ -80,18 +80,18 @@ public class apanel {
                         outpath = cline.substring(i + "folder_out=".length()).trim();
                         outpath = stripQuotes(outpath);
                         outDir = OutDirUtil.prepareOutputDir(outpath);
-                        System.out.println("Output dir ready: " + outDir);
+                        System.out.println("Output_Folder_path=" + outDir);
                         outpath = outDir.toString();
                     }
-    //Path file = validatePath(line, "input_file=", false);  // file                
+                    //Path file = validatePath(line, "input_file=", false);  // file                
                     Path inputFile = validatePath(cline, "target_path=", false);
                     if (inputFile != null) {
-                        System.out.println("Input file= " + inputFile);
+                        System.out.println("Input_file= " + inputFile);
                         tagfiles.add(inputFile.toString());
                     }
                     inputFile = validatePath(cline, "reference_path=", false);//a single file
                     if (inputFile != null) {
-                        System.out.println("Reference_path= " + outDir);
+                        System.out.println("Reference_file_path= " + outDir);
                         reffiles.add(inputFile.toString());
                     }
 
@@ -100,9 +100,13 @@ public class apanel {
                         System.out.println("Designing common primers only based on shared sequences between different files.");
                     }
 
-                    if (line.contains("multiplex=false")) {
-                        multiplex = false;
-                        System.out.println("");
+                    if (line.contains("multiplex=")) {
+                        if (line.contains("multiplex=false")) {
+                            multiplex = false;
+                            System.out.println("Single-plex panel design");
+                        } else {
+                            System.out.println("Multiplex two panel design");
+                        }
                     }
                     if (line.contains("3end=")) {
                         e3 = line.substring(5);
@@ -395,8 +399,8 @@ public class apanel {
 
     private static String[] RunMultiplexPanelDesign(Set<Long> map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
         Path in = Paths.get(tagfile);
-        String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
-
+        // String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
+        String stem = fileStem(in);
         Path outDir = (outpath == null || outpath.isBlank()) ? in.getParent() : Paths.get(outpath);
         if (outDir == null) {
             outDir = Paths.get(".");
@@ -650,7 +654,8 @@ public class apanel {
 
     private static void RunSingleplexPanelDesign(Set<Long> map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
         Path in = Paths.get(tagfile);
-        String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
+        String stem = fileStem(in);
+        //String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
 
         Path outDir = (outpath == null || outpath.isBlank()) ? in.getParent() : Paths.get(outpath);
         if (outDir == null) {
@@ -780,7 +785,7 @@ public class apanel {
 
             long duration = (System.nanoTime() - startTime) / 1000000000;
             System.out.println("Time taken: " + duration + " seconds\n\n");
-
+            /*
             try (FileWriter fileWriter = new FileWriter(primerlistfile.toFile(), true)) {
                 System.out.println("Saving the primer list report to a file: " + primerlistfile);
                 fileWriter.write(sr.toString());
@@ -793,7 +798,7 @@ public class apanel {
                     fileWriter.write(srpanel.toString());
                 }
             }
-
+             */
             if (!pcrcol.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile(), true)) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
@@ -822,7 +827,7 @@ public class apanel {
         }
 
         MaskingSequences ms = new MaskingSequences();
-        return ms.Mask(seqs.toArray(String[]::new), 21);
+        return ms.Mask(seqs.toArray(String[]::new), 19);
     }
 
     private static Path validatePath(String line, String key, boolean isDirectory) {
