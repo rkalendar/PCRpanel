@@ -97,7 +97,7 @@ java -jar C:\PCRpanel\dist\PCRpanel.jar C:\PCRpanel\test\config.file
 **Linux / macOS:**
 
 ```bash
-java -jar -Xms32g -Xmx256g /data/soft/PCRpanel.jar /data/soft/config.file
+java -jar -Xms32g -Xmx128g /data/soft/PCRpanel.jar /data/soft/config.file
 ```
 
 No additional dependencies are required.
@@ -156,7 +156,7 @@ All parameters are specified in a plain-text configuration file.
 | `folder_out`     | *(Optional)* Output directory for results |
 | `genome_path`    | *(Optional)* Path to a folder of reference genome FASTA files (subdirectories included) |
 
-### Example Configuration File
+### Example Configuration File (Windows)
 
 ```ini
 # Target sequences (multiple files supported)
@@ -169,6 +169,9 @@ target_path=C:\PCRpanel\test\NC_000002.gb
 # Optional: existing primers to incorporate
 target_primers=C:\PCRpanel\test\primers.txt
 
+homology=false
+multiplex=true
+
 # Amplicon size constraints
 minPCR=250
 maxPCR=500
@@ -178,7 +181,6 @@ minLen=18
 maxLen=24
 minTm=60
 maxTm=62
-minLC=78
 
 # Primer end constraints
 3end=w
@@ -213,6 +215,41 @@ folder_out=C:\PCRpanel\report\
 > **Note:** When both `target_path` and `folder_path` are provided, PCRpanel processes the **union** of all explicitly listed files plus all files discovered in `folder_path`.
 
 ---
+
+### Example Configuration File (Linux)
+
+```ini
+# Batch Processing
+
+folder_path=/data/genes/
+folder_out=/data/report/
+genome_path=/data/t2t/
+
+# Optional: existing primers to incorporate
+target_primers=/data/primers/primers.txt
+
+# Amplicon size constraints
+minPCR=250
+maxPCR=500
+
+# Primer parameters
+minLen=18
+maxLen=24
+minTm=60
+maxTm=62
+
+# Primer end constraints
+3end=w
+5end=
+
+homology=false
+multiplex=true
+
+# Adapter tails (Illumina example)
+forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT
+reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
+```
+
 
 ## Input Formats
 
