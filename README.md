@@ -97,7 +97,7 @@ java -jar C:\PCRpanel\dist\PCRpanel.jar C:\PCRpanel\test\config.file
 **Linux / macOS:**
 
 ```bash
-java -jar ~/PCRpanel/dist/PCRpanel.jar ~/PCRpanel/test/config.file
+java -jar -Xms32g -Xmx256g /data/soft/PCRpanel.jar /data/soft/config.file
 ```
 
 No additional dependencies are required.
