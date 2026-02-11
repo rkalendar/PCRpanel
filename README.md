@@ -35,6 +35,9 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 - **Multiplex tiling PCR** and conventional PCR primer design
 - Works with **any sequence length** and **any number of targets**
 - Target regions can be **exons, introns, promoters, or arbitrary coordinates**
+- Designing common primers only based on shared sequences between different files.
+- Repeated sequences control.
+- Single-plex panel.
 - Design primers starting from an **existing primer/probe list**
 - Optional alignment against a **reference genome** to check for gene duplications and unknown repeats
 - Support for **5′/3′ tails** (adapters, UMIs, barcodes, etc.)
@@ -154,7 +157,9 @@ All parameters are specified in a plain-text configuration file.
 | `target_primers` | *(Optional)* Path to an existing primer/probe list |
 | `folder_path`    | *(Optional)* Path to a folder of target files (subdirectories included) |
 | `folder_out`     | *(Optional)* Output directory for results |
-| `genome_path`    | *(Optional)* Path to a folder of reference genome FASTA files (subdirectories included) |
+| `genome_path`    | *(Optional)* Path to a folder of reference genome FASTA files (subdirectories included) | 
+| `multiplex`     | By default, the program generates two overlapping panels, with all primers in each panel being compatible. For single-plex panel tasks, specify -multiplex=false.
+| `homology`     |  Designing common primers only based on shared sequences between different files (by default: homology=false) | 
 
 ### Example Configuration File (Windows)
 
@@ -228,6 +233,9 @@ genome_path=/data/t2t/
 # Optional: existing primers to incorporate
 target_primers=/data/primers/primers.txt
 
+homology=false
+multiplex=true
+
 # Amplicon size constraints
 minPCR=250
 maxPCR=500
@@ -242,8 +250,6 @@ maxTm=62
 3end=w
 5end=
 
-homology=false
-multiplex=true
 
 # Adapter tails (Illumina example)
 forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT
