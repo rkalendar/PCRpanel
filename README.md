@@ -33,12 +33,12 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 ## Key Capabilities
 
 - **Multiplex tiling PCR** and conventional PCR primer design
+- **Single-plex panel** mode for non-multiplexed workflows
 - Works with **any sequence length** and **any number of targets**
 - Target regions can be **exons, introns, promoters, or arbitrary coordinates**
-- Designing common primers only based on shared sequences between different files.
-- Repeated sequences control.
-- Single-plex panel.
+- Design **common primers** based on shared sequences across multiple input files (homology mode)
 - Design primers starting from an **existing primer/probe list**
+- **Repeated sequences control** to avoid off-target amplification
 - Optional alignment against a **reference genome** to check for gene duplications and unknown repeats
 - Support for **5′/3′ tails** (adapters, UMIs, barcodes, etc.)
 
@@ -46,10 +46,10 @@ PCRpanel designs **custom amplicon panels** for **NGS** and **Oxford Nanopore (O
 
 ## Requirements
 
-| Requirement        | Details                                          |
-|--------------------|--------------------------------------------------|
+| Requirement          | Details                                        |
+|----------------------|------------------------------------------------|
 | **Operating System** | Platform-independent (Windows, macOS, Linux)   |
-| **Java**           | Version 25 or higher                             |
+| **Java**             | Version 25 or higher                           |
 
 **Java downloads:**
 
@@ -100,7 +100,13 @@ java -jar C:\PCRpanel\dist\PCRpanel.jar C:\PCRpanel\test\config.file
 **Linux / macOS:**
 
 ```bash
-java -jar -Xms32g -Xmx128g /data/soft/PCRpanel.jar /data/soft/config.file
+java -jar /data/soft/PCRpanel.jar /data/soft/config.file
+```
+
+**Linux / macOS (with memory allocation for large genomes):**
+
+```bash
+java -Xms32g -Xmx128g -jar /data/soft/PCRpanel.jar /data/soft/config.file
 ```
 
 No additional dependencies are required.
@@ -135,19 +141,21 @@ All parameters are specified in a plain-text configuration file.
 
 ### Basic Parameters
 
-| Parameter      | Description                        | Example  |
-|----------------|------------------------------------|----------|
-| `minPCR`       | Minimum amplicon size (bp)         | `250`    |
-| `maxPCR`       | Maximum amplicon size (bp)         | `500`    |
-| `minLen`       | Minimum primer length (nt)         | `18`     |
-| `maxLen`       | Maximum primer length (nt)         | `24`     |
-| `minTm`        | Minimum melting temperature (°C)   | `60`     |
-| `maxTm`        | Maximum melting temperature (°C)   | `62`     |
-| `minLC`        | Minimum linguistic complexity (%)  | `80`     |
-| `3end`         | 3′ end constraint                  | `w`      |
-| `5end`         | 5′ end constraint                  | *(empty)*|
-| `forwardtail`  | 5′ adapter for forward primers     | Illumina P5 adapter |
-| `reversetail`  | 5′ adapter for reverse primers     | Illumina P7 adapter |
+| Parameter      | Description                                                          | Default / Example |
+|----------------|----------------------------------------------------------------------|-------------------|
+| `minPCR`       | Minimum amplicon size (bp)                                           | `250`             |
+| `maxPCR`       | Maximum amplicon size (bp)                                           | `500`             |
+| `minLen`       | Minimum primer length (nt)                                           | `18`              |
+| `maxLen`       | Maximum primer length (nt)                                           | `24`              |
+| `minTm`        | Minimum melting temperature (°C)                                     | `60`              |
+| `maxTm`        | Maximum melting temperature (°C)                                     | `62`              |
+| `minLC`        | Minimum linguistic complexity (%)                                    | `80`              |
+| `3end`         | 3′ end constraint                                                    | `w`               |
+| `5end`         | 5′ end constraint                                                    | *(empty)*         |
+| `forwardtail`  | 5′ adapter for forward primers                                       | Illumina P5 adapter |
+| `reversetail`  | 5′ adapter for reverse primers                                       | Illumina P7 adapter |
+| `multiplex`    | Generate two overlapping multiplex-compatible panels                 | `true`            |
+| `homology`     | Design common primers from shared sequences across input files       | `false`           |
 
 ### Input / Output Paths
 
@@ -157,9 +165,7 @@ All parameters are specified in a plain-text configuration file.
 | `target_primers` | *(Optional)* Path to an existing primer/probe list |
 | `folder_path`    | *(Optional)* Path to a folder of target files (subdirectories included) |
 | `folder_out`     | *(Optional)* Output directory for results |
-| `genome_path`    | *(Optional)* Path to a folder of reference genome FASTA files (subdirectories included) | 
-| `multiplex`     | By default, the program generates two overlapping panels, with all primers in each panel being compatible. For single-plex panel tasks, specify -multiplex=false.
-| `homology`     |  Designing common primers only based on shared sequences between different files (by default: homology=false) | 
+| `genome_path`    | *(Optional)* Path to a folder of reference genome FASTA files (subdirectories included) |
 
 ### Example Configuration File (Windows)
 
@@ -174,6 +180,41 @@ target_path=C:\PCRpanel\test\NC_000002.gb
 # Optional: existing primers to incorporate
 target_primers=C:\PCRpanel\test\primers.txt
 
+# Panel mode
+homology=false
+multiplex=true
+
+# Amplicon size constraints
+minPCR=250
+maxPCR=500
+
+# Primer parameters
+minLen=18
+maxLen=24
+minTm=60
+maxTm=62
+
+# Primer end constraints
+3end=w
+5end=
+
+# Adapter tails (Illumina example)
+forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT
+reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
+```
+
+### Example Configuration File (Linux)
+
+```ini
+# Batch processing
+folder_path=/data/genes/
+folder_out=/data/report/
+genome_path=/data/t2t/
+
+# Optional: existing primers to incorporate
+target_primers=/data/primers/primers.txt
+
+# Panel mode
 homology=false
 multiplex=true
 
@@ -221,42 +262,6 @@ folder_out=C:\PCRpanel\report\
 
 ---
 
-### Example Configuration File (Linux)
-
-```ini
-# Batch Processing
-
-folder_path=/data/genes/
-folder_out=/data/report/
-genome_path=/data/t2t/
-
-# Optional: existing primers to incorporate
-target_primers=/data/primers/primers.txt
-
-homology=false
-multiplex=true
-
-# Amplicon size constraints
-minPCR=250
-maxPCR=500
-
-# Primer parameters
-minLen=18
-maxLen=24
-minTm=60
-maxTm=62
-
-# Primer end constraints
-3end=w
-5end=
-
-
-# Adapter tails (Illumina example)
-forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT
-reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
-```
-
-
 ## Input Formats
 
 ### GenBank Files
@@ -301,12 +306,12 @@ Coordinates are **1-based, inclusive** (e.g., `5049..5095` includes both endpoin
 
 **Supported location qualifiers:**
 
-| Qualifier          | Behaviour |
-|--------------------|-----------|
-| `join(…)`          | Multi-exon features — individual intervals are extracted as targets |
-| `order(…)`         | Treated identically to `join` for target extraction |
-| `complement(…)`    | Indicates reverse strand; coordinates are extracted normally |
-| `<` / `>` (partial)| Partial-bound symbols are ignored; numeric positions are used as-is |
+| Qualifier           | Behaviour |
+|---------------------|-----------|
+| `join(…)`           | Multi-exon features — individual intervals are extracted as targets |
+| `order(…)`          | Treated identically to `join` for target extraction |
+| `complement(…)`     | Indicates reverse strand; coordinates are extracted normally |
+| `<` / `>` (partial) | Partial-bound symbols are ignored; numeric positions are used as-is |
 
 **Examples from FEATURES tables:**
 
