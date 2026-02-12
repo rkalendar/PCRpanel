@@ -41,7 +41,7 @@ public class ExonsDesigner {
     }
 
     /**
-     * Формирует список ПЦР-фрагментов, не изменяя исходные координаты экзонов.
+     * Generates a list of PCR fragments without changing the original exon coordinates.
      * exonsArray: [s1,e1,s2,e2,...]  
      */
     public List<PcrFragment> buildPcrFragments(int[] exonsArray) {
@@ -49,12 +49,12 @@ public class ExonsDesigner {
             throw new IllegalArgumentException("exonsArray must be non-null and even-length [start,end,...]");
         }
 
-        // 1) Переносим экзоны в объекты (исходный массив не модифицируем)
+        // 1) Transfer exons to objects (do not modify the source array)
         List<Exon> exons = new ArrayList<>(exonsArray.length / 2);
         for (int i = 0, k = 0; i < exonsArray.length; i += 2, k++) {
             int s = exonsArray[i], e = exonsArray[i + 1];
-            if (e <= 0) continue;                    // как и раньше пропуск "выключенных"
-            if (s > e) { int t = s; s = e; e = t; }  // нормализация на всякий случай
+            if (e <= 0) continue;                    // as before, the "off" pass
+            if (s > e) { int t = s; s = e; e = t; }  // normalization just in case
             exons.add(new Exon(s, e, k));
         }
 
@@ -62,7 +62,7 @@ public class ExonsDesigner {
 
         List<PcrFragment> fragments = new ArrayList<>();
 
-        // 2) «Скользящие» фрагменты: для каждого i расширяем вправо по правилам
+        // 2) "Sliding" fragments: for each i, expand to the right according to the rules
         for (int i = 0; i < exons.size(); i++) {
             int fragStart = exons.get(i).start;
             int fragEnd   = exons.get(i).end;
