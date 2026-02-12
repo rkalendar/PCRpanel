@@ -8,11 +8,11 @@ public class NcRNAExonPromoterExtractor {
 
     private final Path gbPath;
     private final int promoterLen;
-    private final List<Region> regions;   // <-- what you need to "return"
-    private final String sequence;        // DNA from ORIGIN    
-    private final String accession;   // например: NG_034200
-    private final String version;     // например: NG_034200.2
-    private final String recordId;    // version если есть, иначе accession
+    private final List<Region> regions;// <-- what you need to "return"
+    private final String sequence;     // DNA from ORIGIN    
+    private final String accession;   // for example: NG_034200
+    private final String version;     // for example: NG_034200.2
+    private final String recordId;    // version if there is, otherwise accession
 
     public NcRNAExonPromoterExtractor(String arg) throws Exception {
         this(arg, 1000);
@@ -69,13 +69,13 @@ public class NcRNAExonPromoterExtractor {
                     // ACCESSION   NG_034200
                     String rest = t.substring("ACCESSION".length()).trim();
                     if (!rest.isEmpty()) {
-                        acc = rest.split("\\s+")[0]; // берём первый (primary) accession
+                        acc = rest.split("\\s+")[0]; // take the first one (primary) accession
                     }
                 } else if (t.startsWith("VERSION")) {
                     // VERSION     NG_034200.2  GI:...
                     String rest = t.substring("VERSION".length()).trim();
                     if (!rest.isEmpty()) {
-                        ver = rest.split("\\s+")[0]; // первый токен = accession.version
+                        ver = rest.split("\\s+")[0]; // first token = accession.version
                     }
                 }
 
@@ -239,7 +239,7 @@ public class NcRNAExonPromoterExtractor {
             }
         }
 
-        return mergeAndDedupByGene(out, false); // false: не сливать "впритык"
+        return mergeAndDedupByGene(out, false); // false: do not drain completely
     }
 
     static List<Region> mergeAndDedupByGene(List<Region> regions, boolean mergeTouching) {
@@ -253,7 +253,7 @@ public class NcRNAExonPromoterExtractor {
 
             String gene = (r.gene == null) ? "" : r.gene.trim();
             if (gene.isEmpty()) {
-                gene = "NA"; // чтобы не потерять записи без /gene
+                gene = "NA"; // so as not to lose records without /gene
             }
             int a = Math.min(r.start, r.end);
             int b = Math.max(r.start, r.end);
