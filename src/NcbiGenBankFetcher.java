@@ -28,7 +28,7 @@ public class NcbiGenBankFetcher {
     // Please provide your identifiers (NCBI recommends tool+email)
     private final String tool;
     private final String email;
-    private final String apiKey; // optional (можно null)
+    private final String apiKey; // optional (can null)
 
     private final HttpClient http;
 
@@ -69,7 +69,7 @@ public class NcbiGenBankFetcher {
             // 1) RefSeq RNA (usually mRNA/transcripts)
             List<String> nuccoreIds = f.linkGeneToNuccore(geneId.get(), "gene_nuccore_refseqrna");
 
-            // fallback: RefSeqGene (геномный “референсный ген” регион)
+            // fallback: RefSeqGene (genomic "reference gene" region)
             if (nuccoreIds.isEmpty()) {
                 nuccoreIds = f.linkGeneToNuccore(geneId.get(), "gene_nuccore_refseqgene");
             }
@@ -89,7 +89,7 @@ public class NcbiGenBankFetcher {
             f.fetchGenBankNuccore(nuccoreIds, outFile, "gbwithparts"); // или "gb"
             System.out.println("  saved: " + outFile.toAbsolutePath());
 
-            // соблюдаем лимиты (без ключа ~3 rps; с ключом можно чаще)
+            // We observe the limits (without a key ~3 rps; with a key, it is possible to do it more often).
             f.politeDelay();
         }
     }
@@ -112,7 +112,11 @@ public class NcbiGenBankFetcher {
         return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0));
     }
 
-    /** Link GeneID → nuccore (with linkname specified). */
+    /** Link GeneID → nuccore (with linkname specified).
+     * @param geneId
+     * @param linkname
+     * @return 
+     * @throws java.lang.Exception */
     public List<String> linkGeneToNuccore(String geneId, String linkname) throws Exception {
         URI uri = uri("elink.fcgi", Map.of(
                 "dbfrom", "gene",
@@ -122,7 +126,7 @@ public class NcbiGenBankFetcher {
                 "retmode", "xml"
         ));
         Document doc = getXml(uri);
-        // Берём Id из LinkSetDb (можно точнее фильтровать по LinkName)
+        // We take the Id from LinkSetDb (you can filter more precisely by LinkName)
         return x(doc, "//LinkSetDb/Link/Id/text()");
     }
 
@@ -158,7 +162,7 @@ public class NcbiGenBankFetcher {
     /** A slight delay to avoid exceeding the limits. */
     private void politeDelay() {
         try {
- // without apiKey, ~350-400 ms between requests is better (≈2.5–3 rps)
+// without apiKey, ~350-400 ms between requests is better (≈2.5–3 rps)
 // with apiKey, it can be less, but it's also better to be careful
             Thread.sleep(apiKey == null || apiKey.isBlank() ? 400 : 150);
         } catch (InterruptedException ignored) {}
