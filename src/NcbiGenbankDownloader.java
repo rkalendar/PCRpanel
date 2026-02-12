@@ -36,13 +36,13 @@ public class NcbiGenbankDownloader {
     public static void main(String[] args) throws Exception {
         String geneSymbol = "BRCA2";
         String taxId = "9606";              // Homo sapiens
-        Integer ngFrom = 13732;             // пример диапазона (можно null)
-        Integer ngTo = 58896;               // пример диапазона (можно null)
+        Integer ngFrom = 13732;             // example range (can be null)
+        Integer ngTo = 58896;               //  example range (can be null)
 
         var dl = new NcbiGenbankDownloader(
                 "my_java_ncbi_tool",
                 "youremail@example.org",
-                System.getenv("NCBI_API_KEY") // опционально
+                System.getenv("NCBI_API_KEY") // optional
         );
 
         Path outDir = Paths.get("out", geneSymbol);
@@ -79,12 +79,12 @@ public class NcbiGenbankDownloader {
         System.out.println("NG_ (RefSeqGene) records: " + ngAccs.size());
         for (String acc : ngAccs) {
             Path out = outDir.resolve(acc + ".gb");
-            dl.efetchGenbank(acc, out, ngFrom, ngTo); // диапазон как from/to (1-based), или null/null для полного
+            dl.efetchGenbank(acc, out, ngFrom, ngTo); // range as from/to (1-based), or null/null for full
             dl.politeDelay();
         }
     }
 
-    // ---------- шаг 1: GeneID ----------
+    // ---------- Step 1: GeneID ----------
     public Optional<String> findGeneId(String geneSymbol, String taxId) throws Exception {
         // символ + organism (txid)
         String term = geneSymbol + "[Gene Name] AND txid" + taxId + "[Organism]";
@@ -99,9 +99,9 @@ public class NcbiGenbankDownloader {
         return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0));
     }
 
-    // ---------- шаг 2: ELink gene->nuccore, сразу accession.version ----------
+    // ---------- Step 2: ELink gene->nuccore, сразу accession.version ----------
     public List<String> elinkAccessionVersions(String geneId, String linkname) throws Exception {
-        // idtype=acc => ELink возвращает accession.version :contentReference[oaicite:6]{index=6}
+        // idtype=acc => ELink returns accession.version :contentReference[oaicite:6]{index=6}
         URI uri = uri("elink.fcgi", Map.of(
                 "dbfrom", "gene",
                 "db", "nuccore",
@@ -115,9 +115,9 @@ public class NcbiGenbankDownloader {
         return xpathText(doc, "//LinkSetDb/Link/Id/text()");
     }
 
-    // ---------- шаг 3: EFetch GenBank (gbwithparts) + (опц.) диапазон ----------
+    // ---------- Step 3: EFetch GenBank (gbwithparts) + (optional) range ----------
     public void efetchGenbank(String accver, Path outFile, Integer seqStart, Integer seqStop) throws Exception {
-        // GenBank flat file: rettype=gb или gbwithparts; берём gbwithparts :contentReference[oaicite:7]{index=7}
+        // GenBank flat file: rettype=gb или gbwithparts; we take gbwithparts :contentReference[oaicite:7]{index=7}
         Map<String, String> p = new LinkedHashMap<>();
         p.put("db", "nuccore");
         p.put("id", accver);
