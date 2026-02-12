@@ -62,7 +62,7 @@ public class apanel {
 //Path dir = validatePath(line, "reference_path=", true); // directory
                     Path outDir = validatePath(cline, "folder_path=", true);
                     if (outDir != null) {
-                        String s = cline.substring(12);
+                        String s = cline.substring(12).trim();
                         System.out.println("Target_Folder_path=" + s);    // Reading target file(s), one by one
                         String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
                         tagfiles.addAll(List.of(files));
@@ -70,7 +70,7 @@ public class apanel {
                     outDir = validatePath(cline, "genome_path=", true);
                     if (outDir != null) {
                         System.out.println("Genome_path=" + outDir);
-                        String s = cline.substring(12);
+                        String s = cline.substring(12).trim();
                         String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
                         genomefiles = List.of(files);
                     }
@@ -786,21 +786,21 @@ public class apanel {
             long duration = (System.nanoTime() - startTime) / 1000000000;
             System.out.println("Time taken: " + duration + " seconds\n\n");
             /*
-            try (FileWriter fileWriter = new FileWriter(primerlistfile.toFile(), true)) {
+            try (FileWriter fileWriter = new FileWriter(primerlistfile.toFile())) {
                 System.out.println("Saving the primer list report to a file: " + primerlistfile);
                 fileWriter.write(sr.toString());
                 //    fileWriter.write("\nTime taken: " + duration + " seconds\n\n");
             }
 
             if (!pcrpanel.isEmpty()) {
-                try (FileWriter fileWriter = new FileWriter(panelprimerlistfile.toFile(), true)) {
+                try (FileWriter fileWriter = new FileWriter(panelprimerlistfile.toFile())) {
                     System.out.println("Saving panels PCR primers combinations report to a file: " + panelprimerlistfile);
                     fileWriter.write(srpanel.toString());
                 }
             }
              */
             if (!pcrcol.isEmpty()) {
-                try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile(), true)) {
+                try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
                     fileWriter.write(sr1.toString());
                 }
@@ -827,7 +827,7 @@ public class apanel {
         }
 
         MaskingSequences ms = new MaskingSequences();
-        return ms.Mask(seqs.toArray(String[]::new), 19);
+        return ms.mask(seqs.toArray(String[]::new), 19);
     }
 
     private static Path validatePath(String line, String key, boolean isDirectory) {
