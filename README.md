@@ -561,7 +561,7 @@ If you use PCRpanel in your research, please cite:
 
 ## License
 
-This project is distributed under the terms of the [GNU GENERAL PUBLIC LICENSE](GPL-3.0-1-ov-file).
+This project is distributed under the terms of the [GNU GENERAL PUBLIC LICENSE](LICENSE.txt).
 
 ---
 
