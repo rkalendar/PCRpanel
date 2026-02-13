@@ -256,7 +256,6 @@ folder_out=C:\PCRpanel\report\
 |--------------------------------------------|--------------------------------------|
 | `folder_out` specified                     | All results go to `folder_out`       |
 | `folder_out` omitted        | The output directory will be created    |
-| `folder_out` omitted + `folder_path`       | Input folder                         |
 
 > **Note:** When both `target_path` and `folder_path` are provided, PCRpanel processes the **union** of all explicitly listed files plus all files discovered in `folder_path`.
 
