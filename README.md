@@ -2,7 +2,7 @@
 
 [![Java](https://img.shields.io/badge/Java-25%2B-orange?logo=openjdk)](https://www.oracle.com/java/technologies/downloads/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Docs](https://img.shields.io/badge/Docs-Online-informational)](https://primerdigital.com/tools/panel.html)
 
 **PCRpanel** designs custom amplicon panels for **next-generation sequencing (NGS)** and **Oxford Nanopore (ONT)** platforms. It supports **ultra-high multiplex tiling PCR**, standard singleplex workflows, and everything in between. Give it a GenBank or FASTA file, and it returns optimised primer sets ready for wet-lab validation.
