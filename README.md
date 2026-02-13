@@ -54,7 +54,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         PCRpanel Workflow                          │
+│                         PCRpanel Workflow                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │   1. INPUT                 2. TARGET DETECTION                      │
@@ -68,7 +68,7 @@
 │   │ • Generate candidate primers per target region   │              │
 │   │ • Filter by Tm, length, GC%, complexity, ends    │              │
 │   │ • Screen against repeats & reference genome      │              │
-│   │ • Optimise for multiplex compatibility            │              │
+│   │ • Optimise for multiplex compatibility           │              │
 │   └──────────────────────────┬───────────────────────┘              │
 │                              │                                      │
 │   4. OUTPUT                  ▼                                      │
