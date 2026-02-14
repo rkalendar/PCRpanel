@@ -59,7 +59,7 @@
 │                                                                     │
 │   1. INPUT                 2. TARGET DETECTION                      │
 │   ┌──────────────┐         ┌──────────────────────┐                 │
-│   │ GenBank (.gb)│────────▶│ Parse exons, introns, │                │
+│   │ GenBank (.gb)│────────▶│ Parse exons, introns,│                │
 │   │ FASTA  (.fa) │         │ CDS, or full sequence │                │
 │   └──────────────┘         └──────────┬───────────┘                 │
 │                                       │                             │
@@ -330,7 +330,7 @@ reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 
 | Configuration | Output Location |
 |---|---|
-| `folder_out` specified | All results are written to `folder_out` |
+| `folder_out` specified | The output directory is created, its contents are erased, and the results are written to the folder named 'folder_out'. |
 | `folder_out` omitted | An output directory is created automatically |
 
 ---
