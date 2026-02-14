@@ -330,8 +330,8 @@ reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 
 | Configuration | Output Location |
 |---|---|
-| `folder_out` specified | The output directory is created, its contents are erased, and the results are written to the folder named 'folder_out'. |
-| `folder_out` omitted | An output directory is created automatically |
+| `folder_out` exists | The contents of the output directory are deleted |
+| `folder_out` not exist| An output directory is created |
 
 ---
 
