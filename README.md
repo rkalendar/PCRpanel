@@ -20,12 +20,16 @@
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Quick Reference](#quick-reference)
 - [Memory Configuration](#memory-configuration)
 - [Configuration Reference](#configuration-reference)
+- [Adapter & Tail Sequences](#adapter--tail-sequences)
 - [Input Formats](#input-formats)
 - [Target Region Detection](#target-region-detection)
+- [Primer Design Algorithm](#primer-design-algorithm)
 - [Output Files](#output-files)
 - [Use Cases](#use-cases)
+- [Best Practices](#best-practices)
 - [Related Tools](#related-tools)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
@@ -37,7 +41,7 @@
 ## Key Capabilities
 
 | Feature | Description |
-|---------|-------------|
+|---|---|
 | **Multiplex tiling PCR** | Designs two overlapping pools of amplicons for complete, gap-free target coverage |
 | **Single-plex mode** | Non-multiplexed primer design for simpler workflows |
 | **Any-scale input** | Works with sequences of any length and any number of targets |
@@ -53,36 +57,41 @@
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         PCRpanel Workflow                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   1. INPUT                 2. TARGET DETECTION                      │
-│   ┌──────────────┐         ┌──────────────────────┐                 │
-│   │ GenBank (.gb)│────────▶│ Parse exons, introns,│                │
-│   │ FASTA  (.fa) │         │ CDS, or full sequence │                │
-│   └──────────────┘         └──────────┬───────────┘                 │
-│                                       │                             │
-│   3. PRIMER DESIGN                    ▼                             │
-│   ┌──────────────────────────────────────────────────┐              │
-│   │ • Generate candidate primers per target region   │              │
-│   │ • Filter by Tm, length, GC%, complexity, ends    │              │
-│   │ • Screen against repeats & reference genome      │              │
-│   │ • Optimise for multiplex compatibility           │              │
-│   └──────────────────────────┬───────────────────────┘              │
-│                              │                                      │
-│   4. OUTPUT                  ▼                                      │
-│   ┌──────────────────────────────────────────────────┐              │
-│   │ Primer report  •  Pool assignments  •  Sequences │              │
-│   └──────────────────────────────────────────────────┘              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          PCRpanel Workflow                              │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   1. INPUT                    2. TARGET DETECTION                        │
+│   ┌───────────────┐           ┌───────────────────────────┐              │
+│   │ GenBank (.gb)  │─────────▶│ Parse exon, intron, CDS,  │              │
+│   │ FASTA   (.fa)  │          │ or full-sequence targets  │              │
+│   │ Primer list    │          └─────────────┬─────────────┘              │
+│   └───────────────┘                        │                             │
+│                                            ▼                             │
+│   3. PRIMER DESIGN                                                       │
+│   ┌──────────────────────────────────────────────────────────┐           │
+│   │  For each target region:                                 │           │
+│   │  • Generate candidate forward & reverse primers          │           │
+│   │  • Filter by Tm, length, GC%, linguistic complexity      │           │
+│   │  • Enforce 3′/5′ end constraints                         │           │
+│   │  • Screen against repeated sequences                     │           │
+│   │  • Check specificity vs. reference genome (optional)     │           │
+│   │  • Arrange amplicons into multiplex-compatible pools      │           │
+│   └───────────────────────────┬──────────────────────────────┘           │
+│                               │                                          │
+│   4. OUTPUT                   ▼                                          │
+│   ┌──────────────────────────────────────────────────────────┐           │
+│   │  Primer report · Pool assignments · Tailed sequences     │           │
+│   │  Coverage summary · Amplicon coordinates                 │           │
+│   └──────────────────────────────────────────────────────────┘           │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Parse** — Reads GenBank or FASTA input; identifies target coordinates from feature annotations.
+1. **Parse** — Reads GenBank or FASTA input and any existing primer list; identifies target coordinates from feature annotations.
 2. **Detect** — Extracts target regions (exons by default) using a priority-based recognition hierarchy.
 3. **Design** — Generates candidate primers, applies thermodynamic and specificity filters, and arranges amplicons into multiplex-compatible pools.
-4. **Report** — Outputs primer sequences, amplicon coordinates, pool assignments, and validation metrics.
+4. **Report** — Outputs primer sequences, amplicon coordinates, pool assignments, adapter-tailed sequences, and coverage statistics.
 
 ---
 
@@ -108,7 +117,7 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<username>/PCRpanel.git
+git clone https://github.com/rkalendar/PCRpanel.git
 cd PCRpanel
 
 # 2. Confirm Java 25+ is on your PATH
@@ -182,6 +191,33 @@ Primer reports and pool assignments are written alongside your input files (or t
 
 ---
 
+## Quick Reference
+
+A cheat-sheet of common commands:
+
+```bash
+# Single gene, default parameters
+java -jar PCRpanel.jar config.file
+
+# Batch processing — all files in a folder
+java -jar PCRpanel.jar batch_config.file
+# (set folder_path=/data/genes/ in the config)
+
+# With reference genome specificity check
+java -Xms32g -Xmx64g -jar PCRpanel.jar config.file
+# (set genome_path=/data/hg38/ in the config)
+
+# Viral tiling panel (longer amplicons, no exon annotations)
+# (set minPCR=400, maxPCR=500 in the config)
+java -jar PCRpanel.jar viral_config.file
+
+# Consensus primers across multiple strains
+# (set homology=true, multiplex=false in the config)
+java -jar PCRpanel.jar homology_config.file
+```
+
+---
+
 ## Memory Configuration
 
 When using a **reference genome** via `genome_path`, allocate additional heap memory with JVM flags. The table below provides recommended settings:
@@ -223,10 +259,23 @@ All parameters are specified in a plain-text configuration file. Lines beginning
 | `minTm` | Minimum melting temperature (°C) | `60` |
 | `maxTm` | Maximum melting temperature (°C) | `62` |
 | `minLC` | Minimum linguistic complexity (%) | `80` |
-| `3end` | 3′ end constraint (e.g., `w` for weak bases A/T) | `w` |
-| `5end` | 5′ end constraint | *(none)* |
-| `forwardtail` | 5′ adapter tail for forward primers | Illumina P5 |
-| `reversetail` | 5′ adapter tail for reverse primers | Illumina P7 |
+| `3end` | 3′ end constraint (see [End Constraints](#end-constraints)) | `w` |
+| `5end` | 5′ end constraint (see [End Constraints](#end-constraints)) | *(none)* |
+| `forwardtail` | 5′ adapter tail appended to forward primers | Illumina P5 |
+| `reversetail` | 5′ adapter tail appended to reverse primers | Illumina P7 |
+
+### End Constraints
+
+The `3end` and `5end` parameters control which nucleotides are permitted at the primer termini. This is specified using IUPAC ambiguity codes:
+
+| Code | Bases Allowed | Description |
+|---|---|---|
+| `w` | A, T | Weak bases — the default for `3end`; avoids strong 3′ clamping that can promote mispriming |
+| `s` | G, C | Strong bases — enforces a GC clamp at the specified end |
+| `n` | A, T, G, C | Any base — no constraint |
+| *(empty)* | — | No filtering on that end (default for `5end`) |
+
+Other standard IUPAC codes (`r`, `y`, `m`, `k`, `b`, `d`, `h`, `v`) are also accepted.
 
 ### Panel Mode
 
@@ -326,12 +375,94 @@ reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 
 </details>
 
+<details>
+<summary><strong>Oxford Nanopore (ONT) example</strong></summary>
+
+```ini
+# Target — viral genome for tiling
+target_path=/data/NC_045512.2.gb
+
+# Panel mode
+multiplex=true
+homology=false
+
+# ONT-optimised amplicon size (longer reads)
+minPCR=800
+maxPCR=1500
+
+# Primer parameters
+minLen=20
+maxLen=28
+minTm=60
+maxTm=65
+
+# End constraints
+3end=s
+5end=
+
+# No adapter tails (ONT ligation prep)
+forwardtail=
+reversetail=
+```
+
+</details>
+
 ### Output Behaviour
 
 | Configuration | Output Location |
 |---|---|
-| `folder_out` exists | The contents of the output directory are deleted |
-| `folder_out` not exist| An output directory is created |
+| `folder_out` exists | The contents of the output directory are deleted and replaced |
+| `folder_out` does not exist | An output directory is created automatically |
+
+> **Warning:** If `folder_out` points to an existing directory, its contents will be **deleted** before PCRpanel writes new results. Use a dedicated output path to avoid data loss.
+
+---
+
+## Adapter & Tail Sequences
+
+PCRpanel can prepend adapter tails to primers via `forwardtail` and `reversetail`. Below are common adapter sequences for popular sequencing platforms:
+
+### Illumina (Nextera / TruSeq)
+
+```ini
+# Illumina — Read 1 adapter (P5 end)
+forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT
+
+# Illumina — Read 2 adapter (P7 end)
+reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
+```
+
+### Oxford Nanopore (ONT)
+
+For **ONT native barcoding** or **rapid barcoding** kits, adapter tails are typically not required — library prep handles ligation. Set both tails to empty:
+
+```ini
+forwardtail=
+reversetail=
+```
+
+For **ONT PCR barcoding** kits (e.g., SQK-PBK114), consult the kit documentation for the correct tail sequences.
+
+### Ion Torrent
+
+```ini
+# Ion Torrent — Adapter A
+forwardtail=CCATCTCATCCCTGCGTGTCTCCGACTCAG
+
+# Ion Torrent — trP1 adapter
+reversetail=CCTCTCTATGGGCAGTCGGTGAT
+```
+
+### Custom Tails (UMIs, Barcodes)
+
+You can prepend any arbitrary sequence — for example, a UMI (unique molecular identifier):
+
+```ini
+# 8 nt UMI + Illumina adapter
+forwardtail=NNNNNNNNACACTCTTTCCCTACACGACGCTCTTCCGATCT
+```
+
+> **Tip:** Verify that your tail sequences match the library preparation kit you are using. Incorrect adapters will cause read loss during demultiplexing.
 
 ---
 
@@ -411,6 +542,39 @@ Example:  5049..5095  →  [5048, 5095)    length = 47 bp
 
 ---
 
+## Primer Design Algorithm
+
+PCRpanel uses a multi-stage filtering pipeline to select optimal primers for each target region:
+
+### Stage 1 — Candidate Generation
+
+For every target region, PCRpanel generates all possible forward and reverse primers within the allowed length range (`minLen`–`maxLen`). Candidates are drawn from the flanking sequence upstream and downstream of each target.
+
+### Stage 2 — Thermodynamic Filtering
+
+Each candidate is evaluated against thermodynamic criteria:
+
+| Filter | Parameter | What It Checks |
+|---|---|---|
+| **Melting temperature** | `minTm`–`maxTm` | Nearest-neighbour Tm must fall within the specified range |
+| **Linguistic complexity** | `minLC` | Rejects low-complexity sequences (e.g., poly-A, dinucleotide repeats) |
+| **End constraints** | `3end`, `5end` | Only candidates with permitted terminal nucleotides pass |
+
+### Stage 3 — Specificity Screening
+
+- **Repeat filtering** — Candidates that bind to repeated sequences in the target are penalised or rejected.
+- **Genome alignment** *(optional, requires `genome_path`)* — Candidates are aligned against the reference genome to detect off-target binding sites, gene duplications, and paralogous regions.
+
+### Stage 4 — Amplicon Assembly & Pooling
+
+Passing primers are paired into amplicons that tile across the target region. When `multiplex=true`, amplicons are split into **two pools** (A and B) such that no two overlapping amplicons share a pool, enabling two-reaction multiplex PCR with complete coverage.
+
+### Stage 5 — Tail Attachment
+
+If `forwardtail` or `reversetail` is specified, the adapter sequences are prepended to the selected primers. The final output includes both bare and tailed primer sequences.
+
+---
+
 ## Output Files
 
 PCRpanel generates the following output for each target:
@@ -421,6 +585,22 @@ PCRpanel generates the following output for each target:
 | **Pool assignments** | Multiplex pool allocation (Pool A / Pool B) for each primer pair, ensuring no overlapping amplicons share a pool |
 | **Tailed primers** | Full primer sequences including 5′ adapter tails, ready for ordering |
 | **Coverage summary** | Target region coverage statistics and any gaps in amplicon tiling |
+
+### Interpreting the Primer Report
+
+Each primer entry in the report includes:
+
+| Field | Description |
+|---|---|
+| **Primer ID** | Unique identifier (gene name + exon + direction) |
+| **Sequence** | Bare primer sequence (5′→3′) |
+| **Length** | Primer length in nucleotides |
+| **Tm** | Predicted melting temperature (°C), calculated using the nearest-neighbour method |
+| **GC%** | GC content as a percentage |
+| **LC%** | Linguistic complexity (0–100%) |
+| **Amplicon start–end** | Genomic coordinates of the resulting amplicon |
+| **Amplicon size** | Amplicon length in base pairs |
+| **Pool** | Multiplex pool assignment (A or B) |
 
 ---
 
@@ -451,7 +631,25 @@ minPCR=400
 maxPCR=500
 ```
 
-### 3. Consensus Primer Design (Homology Mode)
+### 3. ONT Long-Amplicon Tiling
+
+Oxford Nanopore's long reads allow larger amplicons. Design a tiling panel with 800–1500 bp amplicons for efficient ONT sequencing:
+
+```ini
+target_path=/data/NC_045512.2.gb
+multiplex=true
+minPCR=800
+maxPCR=1500
+minLen=20
+maxLen=28
+minTm=60
+maxTm=65
+3end=s
+forwardtail=
+reversetail=
+```
+
+### 4. Consensus Primer Design (Homology Mode)
 
 When you have multiple related sequences (e.g., alleles, strains, or gene family members), enable homology mode to design primers from conserved regions:
 
@@ -464,7 +662,7 @@ homology=true
 multiplex=false
 ```
 
-### 4. Building on Existing Primers
+### 5. Building on Existing Primers
 
 Start from a validated primer set and let PCRpanel fill coverage gaps:
 
@@ -475,6 +673,40 @@ target_primers=/data/validated_primers.txt
 multiplex=true
 minPCR=250
 maxPCR=500
+```
+
+---
+
+## Best Practices
+
+### Choosing Amplicon Size
+
+| Application | Recommended `minPCR`–`maxPCR` | Rationale |
+|---|---|---|
+| Illumina short-read panels | 200–500 bp | Matches typical read lengths (2×150 or 2×250) |
+| ONT tiling panels | 800–1500 bp | Exploits long-read capability; fewer amplicons needed |
+| FFPE / degraded DNA | 150–250 bp | Shorter amplicons improve success rate on fragmented templates |
+| Liquid biopsy (cfDNA) | 100–200 bp | cfDNA fragments are ~167 bp; keep amplicons short |
+
+### Optimising Primer Parameters
+
+- **Narrow Tm range** (e.g., 60–62 °C) ensures uniform annealing across all primers in a multiplex pool. Widen to 58–65 °C only if no primers are found.
+- **Enforce `3end=w`** (default) for standard panels. Use `3end=s` (GC clamp) for GC-rich targets where strong 3′ binding is needed.
+- **Start with default `minLC=80`**. Lower to 70 only for AT-rich or repetitive genomes (e.g., *Plasmodium*, AT > 80%).
+
+### Reference Genome Checks
+
+Using `genome_path` adds a specificity screen that catches off-target amplification from gene families, pseudogenes, and segmental duplications. This is strongly recommended for clinical panels, but can be skipped for rapid prototyping or when no reference is available.
+
+### Handling Large Gene Panels
+
+When designing panels with dozens of genes, use `folder_path` for batch processing and `folder_out` to collect all outputs in one directory:
+
+```ini
+folder_path=/data/panel_genes/
+folder_out=/data/panel_output/
+genome_path=/data/hg38/
+multiplex=true
 ```
 
 ---
@@ -528,6 +760,10 @@ See [Memory Configuration](#memory-configuration) for genome-size-specific recom
 - **Increase amplicon size range:** Allow larger amplicons with a higher `maxPCR`.
 - **Lower complexity threshold:** Reduce `minLC` (e.g., to `70`) for AT-rich or repetitive regions.
 
+### Output directory was overwritten
+
+If `folder_out` points to an existing directory, PCRpanel **deletes its contents** before writing results. Always use a dedicated output path, or back up existing results before re-running.
+
 ---
 
 ## FAQ
@@ -536,16 +772,31 @@ See [Memory Configuration](#memory-configuration) for genome-size-specific recom
 Yes. PCRpanel is organism-agnostic. Any GenBank or FASTA sequence can be used as input — viral, bacterial, plant, or animal.
 
 **Q: What is linguistic complexity, and why filter on it?**
-Linguistic complexity measures sequence diversity on a 0–100% scale. Low-complexity regions (e.g., `AAAAAAA` or `ATATATATAT`) make poor primer binding sites. The default threshold of 80% filters out these regions.
+Linguistic complexity measures sequence diversity on a 0–100% scale. Low-complexity regions (e.g., `AAAAAAA` or `ATATATATAT`) make poor primer binding sites because they can hybridise to many genomic locations. The default threshold of 80% filters out these regions.
 
 **Q: Can I use custom adapters instead of Illumina?**
-Yes. Set `forwardtail` and `reversetail` to any nucleotide sequence. Leave them blank for no tails.
+Yes. Set `forwardtail` and `reversetail` to any nucleotide sequence. Leave them blank for no tails. See [Adapter & Tail Sequences](#adapter--tail-sequences) for platform-specific examples.
 
 **Q: How does multiplex pooling work?**
 When `multiplex=true`, PCRpanel splits primer pairs into **two pools** (A and B) such that amplicons within each pool do not overlap. This enables two-reaction multiplex PCR with complete target coverage.
 
 **Q: Can I run PCRpanel without a reference genome?**
 Yes. The `genome_path` parameter is optional. Without it, PCRpanel skips the genome-wide specificity check — useful for rapid panel prototyping or when working with organisms that lack a reference assembly.
+
+**Q: What does the `3end=w` constraint do?**
+It restricts the 3′-terminal nucleotide of each primer to a weak base (A or T). This is a common design heuristic to reduce the risk of mispriming from overly strong 3′ binding. See [End Constraints](#end-constraints) for all options.
+
+**Q: Can I design primers for long-read (ONT / PacBio) sequencing?**
+Yes. Increase `maxPCR` to allow longer amplicons (e.g., 800–1500 bp for ONT) and widen the primer length and Tm ranges accordingly. See [Use Case 3](#3-ont-long-amplicon-tiling) for a complete example.
+
+**Q: How do I download GenBank files for my target genes?**
+Use the companion tool **[NCBI RefSeq GenBank Downloader](https://github.com/rkalendar/genbanktools)** to batch-download records by gene symbol or accession number.
+
+**Q: What happens if I specify both `target_path` and `folder_path`?**
+PCRpanel processes the **union** of all individually listed `target_path` files and all files discovered inside `folder_path` (including subdirectories).
+
+**Q: Is PCRpanel suitable for clinical / diagnostic panel design?**
+PCRpanel generates primer candidates optimised for multiplex compatibility and specificity. For clinical use, primers should still undergo wet-lab validation (e.g., gel electrophoresis, coverage uniformity assessment, and analytical sensitivity testing) before deployment in a diagnostic workflow.
 
 ---
 
@@ -555,7 +806,7 @@ If you use PCRpanel in your research, please cite:
 
 > Kalendar, R. (2025). PCRpanel: Custom Amplicon Panel Designer. Available at <https://primerdigital.com/tools/panel.html>
 
-
+<!-- TODO: Replace with the published paper reference once available. -->
 
 ---
 
