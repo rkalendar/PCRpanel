@@ -49,7 +49,7 @@
 | **Homology mode** | Designs common (consensus) primers from shared regions across multiple input files |
 | **Existing primer import** | Starts from your current primer/probe list and fills gaps |
 | **Repeat filtering** | Avoids off-target amplification by screening for repeated sequences |
-| **Genome alignment** | Optional alignment against a reference genome to flag gene duplications and unknown repeats |
+| **Genome reference** | Optional, a reference genome to identify gene duplications and unknown repeats |
 | **Adapter support** | Attach 5′/3′ tails — adapters, UMIs, barcodes, indexing sequences — to any primer |
 
 ---
@@ -74,9 +74,10 @@
 │   │  • Generate candidate forward & reverse primers          │           │
 │   │  • Filter by Tm, length, GC%, linguistic complexity      │           │
 │   │  • Enforce 3′/5′ end constraints                         │           │
-│   │  • Screen against repeated sequences                     │           │
+│   │  • *De novo* detection and masking of repetitive sequences  │        │
+│   │  • Screen against repeated sequences (optional)          │           │
 │   │  • Check specificity vs. reference genome (optional)     │           │
-│   │  • Arrange amplicons into multiplex-compatible pools      │           │
+│   │  • Arrange amplicons into multiplex-compatible pools     │           │
 │   └───────────────────────────┬──────────────────────────────┘           │
 │                               │                                          │
 │   4. OUTPUT                   ▼                                          │
