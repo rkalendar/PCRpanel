@@ -412,7 +412,7 @@ reversetail=
 
 | Configuration | Output Location |
 |---|---|
-| `folder_out` exists | The contents of the output directory are deleted and replaced |
+| `folder_out` exists | The contents of the output directory are `deleted` and `replaced` |
 | `folder_out` does not exist | An output directory is created automatically |
 
 > **Warning:** If `folder_out` points to an existing directory, its contents will be **deleted** before PCRpanel writes new results. Use a dedicated output path to avoid data loss.
