@@ -503,7 +503,7 @@ public class apanel {
             }
 
             PrimerDesign pd = new PrimerDesign(map, seq, name, minlen, maxlen, mintm, maxtm, minlc, exons, listprimers, refsequence, fastaseq, homology);
-            List<Pair> pcrcol = pd.RunDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
+            List<Pair> pcrcol = pd.runDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
 
             PanelsCollector panels = new PanelsCollector(pcrcol);
             panels.CombinePairsPanel(exons.length);
@@ -561,8 +561,8 @@ public class apanel {
                 }
             }
              */
-            PrimersCollector[] fPrimersList = pd.getpForwardPrimers();
-            PrimersCollector[] rPrimersList = pd.getpReversePrimers();
+            PrimersCollector[] fPrimersList = pd.getForwardPrimers();
+            PrimersCollector[] rPrimersList = pd.getReversePrimers();
             int h = -1;
             sr.append("\nName\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)");
             for (int j = 0; j < exons.length - 1; j += 2) {
@@ -759,7 +759,7 @@ public class apanel {
 
             PrimerDesign pd = new PrimerDesign(map, seq, name, minlen, maxlen, mintm, maxtm, minlc, exons, listprimers, refsequence, fastaseq, homology);
 
-            List<Pair> pcrcol = pd.RunDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
+            List<Pair> pcrcol = pd.runDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
 
             PanelsCollector panels = new PanelsCollector(pcrcol);
             panels.CombinePairsPanel(exons.length);
@@ -784,8 +784,8 @@ public class apanel {
                 }
             }
 
-            PrimersCollector[] fPrimersList = pd.getpForwardPrimers();
-            PrimersCollector[] rPrimersList = pd.getpReversePrimers();
+            PrimersCollector[] fPrimersList = pd.getForwardPrimers();
+            PrimersCollector[] rPrimersList = pd.getReversePrimers();
             int h = -1;
             sr.append("\nName\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)");
             for (int j = 0; j < exons.length - 1; j += 2) {
@@ -834,7 +834,7 @@ public class apanel {
                 }
             }
 
-            /*
+            
             try (FileWriter fileWriter = new FileWriter(primerlistfile.toFile())) {
                 System.out.println("Saving the primer list report to a file: " + primerlistfile);
                 fileWriter.write(sr.toString());
@@ -846,7 +846,7 @@ public class apanel {
                     fileWriter.write(srpanel.toString());
                 }
             }
-             */
+ 
             if (!pcrcol.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
