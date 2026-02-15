@@ -58,12 +58,12 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                          PCRpanel Workflow                              │
+│                          PCRpanel Workflow                               │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │   1. INPUT                    2. TARGET DETECTION                        │
 │   ┌───────────────┐           ┌───────────────────────────┐              │
-│   │ GenBank (.gb)  │─────────▶│ Parse exon, intron, CDS,  │              │
+│   │ GenBank (.gb)  │─────────▶│ Parse exon, intron, CDS,  │             │
 │   │ FASTA   (.fa)  │          │ or full-sequence targets  │              │
 │   │ Primer list    │          └─────────────┬─────────────┘              │
 │   └───────────────┘                        │                             │
@@ -74,7 +74,7 @@
 │   │  • Generate candidate forward & reverse primers          │           │
 │   │  • Filter by Tm, length, GC%, linguistic complexity      │           │
 │   │  • Enforce 3′/5′ end constraints                         │           │
-│   │  • *De novo* detection and masking of repetitive sequences  │        │
+│   │  • De novo detection and masking of repetitive sequences │           │
 │   │  • Screen against repeated sequences (optional)          │           │
 │   │  • Check specificity vs. reference genome (optional)     │           │
 │   │  • Arrange amplicons into multiplex-compatible pools     │           │
