@@ -691,13 +691,13 @@ maxPCR=500
 
 ### Optimising Primer Parameters
 
-- **Narrow Tm range** (e.g., 60–62 °C) ensures uniform annealing across all primers in a multiplex pool. Widen to 58–65 °C only if no primers are found.
+- **Narrow Tm range** (e.g., 60–62 °C) ensures uniform annealing across all primers in a multiplex pool. Widen to 60–64 °C only if no primers are found.
 - **Enforce `3end=w`** (default) for standard panels. Use `3end=s` (GC clamp) for GC-rich targets where strong 3′ binding is needed.
-- **Start with default `minLC=80`**. Lower to 70 only for AT-rich or repetitive genomes (e.g., *Plasmodium*, AT > 80%).
+- **Start with default `minLC=80`**. This option is not necessary for control; the software automatically chooses the best primers from the possible ones according to this criterion.
 
 ### Reference Genome Checks
 
-Using `genome_path` adds a specificity screen that catches off-target amplification from gene families, pseudogenes, and segmental duplications. This is strongly recommended for clinical panels, but can be skipped for rapid prototyping or when no reference is available.
+Using `genome_path` adds a specificity screen that catches off-target amplification from gene families, pseudogenes, and segmental duplications. This is optional, but recommended for clinical panels, but can be skipped for rapid prototyping or when no reference is available.
 
 ### Handling Large Gene Panels
 
@@ -773,16 +773,16 @@ If `folder_out` points to an existing directory, PCRpanel **deletes its contents
 Yes. PCRpanel is organism-agnostic. Any GenBank or FASTA sequence can be used as input — viral, bacterial, plant, or animal.
 
 **Q: What is linguistic complexity, and why filter on it?**
-Linguistic complexity measures sequence diversity on a 0–100% scale. Low-complexity regions (e.g., `AAAAAAA` or `ATATATATAT`) make poor primer binding sites because they can hybridise to many genomic locations. The default threshold of 80% filters out these regions.
+Linguistic complexity measures sequence diversity on a 0–100% scale. Low-complexity regions (e.g., `AAAAAAA` or `ATATATATAT`) make poor primer binding sites because they can hybridise to many genomic locations. The default threshold of 80% filters out these regions. This criterion indirectly indicates the effectiveness of the PCR primer and its uniqueness.
 
 **Q: Can I use custom adapters instead of Illumina?**
 Yes. Set `forwardtail` and `reversetail` to any nucleotide sequence. Leave them blank for no tails. See [Adapter & Tail Sequences](#adapter--tail-sequences) for platform-specific examples.
 
 **Q: How does multiplex pooling work?**
-When `multiplex=true`, PCRpanel splits primer pairs into **two pools** (A and B) such that amplicons within each pool do not overlap. This enables two-reaction multiplex PCR with complete target coverage.
+When `multiplex=true` (default), PCRpanel splits primer pairs into **two pools** (A and B) such that amplicons within each pool do not overlap. This enables two-reaction multiplex PCR with complete target coverage.
 
 **Q: Can I run PCRpanel without a reference genome?**
-Yes. The `genome_path` parameter is optional. Without it, PCRpanel skips the genome-wide specificity check — useful for rapid panel prototyping or when working with organisms that lack a reference assembly.
+Yes. The `genome_path` parameter is optional. Without it, PCRpanel skips the genome-wide specificity check — useful for rapid panel prototyping or when working with organisms that lack a reference assembly. Repeating sequences will be identified de novo in target sequences automatically, without using a reference library. 
 
 **Q: What does the `3end=w` constraint do?**
 It restricts the 3′-terminal nucleotide of each primer to a weak base (A or T). This is a common design heuristic to reduce the risk of mispriming from overly strong 3′ binding. See [End Constraints](#end-constraints) for all options.
