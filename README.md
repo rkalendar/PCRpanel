@@ -48,7 +48,7 @@
 | **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
 | **Homology mode** | Designs common (consensus) primers from shared regions across multiple input files |
 | **Existing primer import** | Starts from your current primer/probe list and fills gaps |
-| **Repeat filtering** | Avoids off-target amplification by screening for repeated sequences |
+| **Repeat filtering** | Avoids off-target amplification by masking repeated sequences |
 | **Genome reference** | Optional, a reference genome to identify gene duplications and unknown repeats |
 | **Adapter support** | Attach 5′/3′ tails — adapters, UMIs, barcodes, indexing sequences — to any primer |
 
@@ -66,8 +66,8 @@
 │   │ GenBank (.gb)  │─────────▶│ Parse exon, intron, CDS,  │             │
 │   │ FASTA   (.fa)  │          │ or full-sequence targets  │              │
 │   │ Primer list    │          └─────────────┬─────────────┘              │
-│   └───────────────┘                        │                             │
-│                                            ▼                             │
+│   └───────────────┘                         │                            │
+│                                             ▼                            │
 │   3. PRIMER DESIGN                                                       │
 │   ┌──────────────────────────────────────────────────────────┐           │
 │   │  For each target region:                                 │           │
@@ -169,7 +169,6 @@ minLen=18
 maxLen=24
 minTm=60
 maxTm=62
-minLC=80
 
 # --- End constraints ---
 3end=w
@@ -259,7 +258,6 @@ All parameters are specified in a plain-text configuration file. Lines beginning
 | `maxLen` | Maximum primer length (nt) | `24` |
 | `minTm` | Minimum melting temperature (°C) | `60` |
 | `maxTm` | Maximum melting temperature (°C) | `62` |
-| `minLC` | Minimum linguistic complexity (%) | `80` |
 | `3end` | 3′ end constraint (see [End Constraints](#end-constraints)) | `w` |
 | `5end` | 5′ end constraint (see [End Constraints](#end-constraints)) | *(none)* |
 | `forwardtail` | 5′ adapter tail appended to forward primers | Illumina P5 |
