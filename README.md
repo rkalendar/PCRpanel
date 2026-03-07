@@ -63,16 +63,16 @@
 │                                                                          │
 │   1. INPUT                    2. TARGET DETECTION                        │
 │   ┌───────────────┐           ┌───────────────────────────┐              │
-│   │ GenBank (.gb)  │─────────▶│ Parse exon, intron, CDS,  │             │
-│   │ FASTA   (.fa)  │          │ or full-sequence targets  │              │
-│   │ Primer list    │          └─────────────┬─────────────┘              │
+│   │ GenBank (.gb) │─────────▶ │ Parse exon, intron, CDS,  │             │
+│   │ FASTA   (.fa) │           │ or full-sequence targets  │              │
+│   │ Primer list   │           └─────────────┬─────────────┘              │
 │   └───────────────┘                         │                            │
 │                                             ▼                            │
 │   3. PRIMER DESIGN                                                       │
 │   ┌──────────────────────────────────────────────────────────┐           │
 │   │  For each target region:                                 │           │
 │   │  • Generate candidate forward & reverse primers          │           │
-│   │  • Filter by Tm, length, GC%, linguistic complexity      │           │
+│   │  • Filter by Tm, length, linguistic complexity           │           │
 │   │  • Enforce 3′/5′ end constraints                         │           │
 │   │  • De novo detection and masking of repetitive sequences │           │
 │   │  • Screen against repeated sequences (optional)          │           │
