@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Docs](https://img.shields.io/badge/Docs-Online-informational)](https://primerdigital.com/tools/panel.html)
 
-**PCRpanel** designs custom amplicon panels for **next-generation sequencing (NGS)** and **Oxford Nanopore (ONT)** platforms. It supports **ultra-high multiplex tiling PCR**, standard singleplex workflows, and everything in between. Give it a GenBank or FASTA file, and it returns optimised primer sets ready for wet-lab validation.
+**PCRpanel** designs custom amplicon panels for **next-generation sequencing (NGS)** and **Oxford Nanopore (ONT)** platforms. It supports **ultra-high multiplex tiling PCR** and standard singleplex workflows. Give it a GenBank or FASTA file, and it returns optimised primer sets ready for wet-lab validation.
 
 🌐 **Online version:** <https://primerdigital.com/tools/panel.html>
 👤 **Author:** Ruslan Kalendar
