@@ -232,7 +232,7 @@ When using a **reference genome** via `genome_path`, allocate additional heap me
 **Example — human genome:**
 
 ```bash
-java -Xms32g -Xmx128g -jar PCRpanel.jar config.file
+java -Xms16g -Xmx64g -jar PCRpanel.jar config.file
 ```
 
 **What the flags mean:**
