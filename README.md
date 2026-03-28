@@ -747,7 +747,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 Increase heap allocation:
 
 ```bash
-java -Xms32g -Xmx128g -jar PCRpanel.jar config.file
+java -Xms16g -Xmx64g -jar PCRpanel.jar config.file
 ```
 
 See [Memory Configuration](#memory-configuration) for genome-size-specific recommendations.
