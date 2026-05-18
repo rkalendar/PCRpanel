@@ -292,8 +292,52 @@ Other standard IUPAC codes (`r`, `y`, `m`, `k`, `b`, `d`, `h`, `v`) are also acc
 | `folder_path` | Directory of target files (subdirectories included) | No |
 | `folder_out` | Output directory for results | No |
 | `genome_path` | Directory of reference genome FASTA files (subdirectories included) | No |
+| `target_mask` *(alias: `folder_mask`)* | File-extension mask applied to `folder_path` (e.g. `*.fna`). See [File Masks](#file-masks). | No |
+| `genome_mask` | File-extension mask applied to `genome_path`. See [File Masks](#file-masks). | No |
+| `file_mask` | Shortcut — applies the same mask to **both** `folder_path` and `genome_path`. | No |
 
 > **Note:** When both `target_path` and `folder_path` are provided, PCRpanel processes the **union** of all listed files plus all files discovered in the folder.
+
+### File Masks
+
+When `folder_path` or `genome_path` points to a directory that contains a mix of file types (e.g., `*.fna`, `*.gb`, `*.txt`, index files, READMEs), use a **file mask** to restrict which files are picked up. Without a mask, PCRpanel reads every file (`*.*`) and relies on per-file format detection — which is fine for clean folders but wasteful for mixed ones.
+
+| Mask syntax | Expands to | Meaning |
+|---|---|---|
+| `*.fna` | `*.fna` | Glob pattern — used as-is |
+| `fna` | `*.fna` | Bare extension — `*.` is prepended automatically |
+| `fna,fasta` | `*.fna`, `*.fasta` | Multiple masks — comma-separated |
+| `*.fna;*.gb` | `*.fna`, `*.gb` | Multiple masks — semicolon or `\|` also accepted |
+| *(omitted)* | `*.*` | Default — all files |
+
+**Examples:**
+
+```ini
+# Only pick up *.fna files from the target folder
+folder_path=/data/refs/
+target_mask=*.fna
+```
+
+```ini
+# Short form — bare extension
+folder_path=/data/refs/
+target_mask=fna
+```
+
+```ini
+# Multiple extensions
+folder_path=/data/refs/
+target_mask=fna,fasta,gb
+```
+
+```ini
+# Same mask for targets and reference genome
+folder_path=/data/refs/
+genome_path=/data/genomes/
+file_mask=*.fna
+```
+
+> **Tip:** The mask parameter can appear **anywhere** in the configuration file — before or after the matching `folder_path` / `genome_path` line. Masks are applied after the full config is parsed.
 
 ### Full Configuration Examples
 
@@ -343,8 +387,12 @@ reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT
 folder_path=/data/genes/
 folder_out=/data/report/
 
+# Only pick up GenBank files from the folder (skip indexes, READMEs, etc.)
+target_mask=gb,gbff
+
 # Reference genome for specificity checks
 genome_path=/data/t2t/
+genome_mask=*.fna
 
 # Existing primers
 target_primers=/data/primers/primers.txt
@@ -699,12 +747,14 @@ Using `genome_path` adds a specificity screen that catches off-target amplificat
 
 ### Handling Large Gene Panels
 
-When designing panels with dozens of genes, use `folder_path` for batch processing and `folder_out` to collect all outputs in one directory:
+When designing panels with dozens of genes, use `folder_path` for batch processing and `folder_out` to collect all outputs in one directory. If the input folder contains files of mixed types, add a `target_mask` to restrict the search to the format you want:
 
 ```ini
 folder_path=/data/panel_genes/
 folder_out=/data/panel_output/
 genome_path=/data/hg38/
+target_mask=gb,gbff      # only GenBank files; ignore *.txt, *.idx, etc.
+genome_mask=*.fna
 multiplex=true
 ```
 
@@ -730,6 +780,17 @@ multiplex=true
 ### FASTA fallback
 
 When FASTA input is provided, each record is treated as one full-length target region. For exon-level targeting, supply GenBank-formatted input with gene annotations.
+
+### PCRpanel reads unrelated files in my input folder
+
+If `folder_path` or `genome_path` points to a directory that also contains indexes, READMEs, or files in formats you do not want processed, add a `target_mask` / `genome_mask` to restrict the search:
+
+```ini
+folder_path=/data/refs/
+target_mask=fna,fasta     # only FASTA files; ignore *.gb, *.txt, *.idx
+```
+
+See [File Masks](#file-masks) for the full mask syntax.
 
 ### Java version errors
 
@@ -793,6 +854,9 @@ Use the companion tool **[NCBI RefSeq GenBank Downloader](https://github.com/rka
 
 **Q: What happens if I specify both `target_path` and `folder_path`?**
 PCRpanel processes the **union** of all individually listed `target_path` files and all files discovered inside `folder_path` (including subdirectories).
+
+**Q: My input folder contains FASTA, GenBank, and unrelated files. How do I tell PCRpanel which ones to read?**
+Use `target_mask` for the targets folder and/or `genome_mask` for the reference genome folder. Accepted forms include `*.fna`, a bare extension like `fna`, or a comma-separated list `fna,fasta,gb`. See [File Masks](#file-masks).
 
 **Q: Is PCRpanel suitable for clinical / diagnostic panel design?**
 PCRpanel generates primer candidates optimised for multiplex compatibility and specificity. For clinical use, primers should still undergo wet-lab validation (e.g., gel electrophoresis, coverage uniformity assessment, and analytical sensitivity testing) before deployment in a diagnostic workflow.
