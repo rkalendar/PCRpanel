@@ -1,9 +1,11 @@
 folder_path=C:\PCRpanel\test\
-target_mask=*.fna
+target_mask=*.*
 folder_out=C:\PCRpanel\test\report\
 genome_path=C:\PCRpanel\test\human\
 reference_path=C:\PCRpanel\test\ref\
 
+multiplex=true
+homology=false
 
 target_path=C:\PCRpanel\test\NG_008690.txt
 target_path=C:\PCRpanel\test\NG_011731.txt
