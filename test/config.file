@@ -1,8 +1,8 @@
-folder_path=
+folder_path=C:\PCRpanel\test\
 target_mask=*.fna
-folder_out=
-genome_path=
-reference_path=
+folder_out=C:\PCRpanel\test\report\
+genome_path=C:\PCRpanel\test\human\
+reference_path=C:\PCRpanel\test\ref\
 
 
 target_path=C:\PCRpanel\test\NG_008690.txt
@@ -16,9 +16,9 @@ target_path=C:\PCRpanel\test\NG_012059.txt
 
 target_primers=C:\PCRpanel\test\primers.txt
 
-minPCR=50
+minPCR=250
 maxPCR=500
-minLen=18
+minLen=20
 maxLen=24
 minTm=60
 maxTm=62
