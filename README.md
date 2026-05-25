@@ -26,6 +26,7 @@
 - [Adapter & Tail Sequences](#adapter--tail-sequences)
 - [Input Formats](#input-formats)
 - [Target Region Detection](#target-region-detection)
+- [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting)
 - [Primer Design Algorithm](#primer-design-algorithm)
 - [Output Files](#output-files)
 - [Use Cases](#use-cases)
@@ -46,6 +47,7 @@
 | **Single-plex mode** | Non-multiplexed primer design for simpler workflows |
 | **Any-scale input** | Works with sequences of any length and any number of targets |
 | **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
+| **Promoter targeting** | Designs primers for a configurable upstream region 5′ of each transcript's transcription start site (TSS) |
 | **Homology mode** | Designs common (consensus) primers from shared regions across multiple input files |
 | **Existing primer import** | Starts from your current primer/probe list and fills gaps |
 | **Repeat filtering** | Avoids off-target amplification by masking repeated sequences |
@@ -282,6 +284,12 @@ Other standard IUPAC codes (`r`, `y`, `m`, `k`, `b`, `d`, `h`, `v`) are also acc
 |---|---|---|
 | `multiplex` | Generate two overlapping, multiplex-compatible amplicon pools | `true` |
 | `homology` | Design consensus primers from shared sequences across input files | `false` |
+
+### Target Region
+
+| Parameter | Description | Default |
+|---|---|---|
+| `promoter` | Length (bp) of the upstream promoter region added as a target, measured from each transcript's TSS. `0` or omitted disables it. See [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting). | `0` *(off)* |
 
 ### Input / Output Paths
 
@@ -551,7 +559,7 @@ Many RefSeq/GenBank records lack explicit `exon` features. PCRpanel applies a ti
 | 3 | `CDS` | ⏸ Suspended | `join(…)` blocks used when transcript features are absent |
 | 4 | *Full-sequence fallback* | ✅ Active | Entire sequence treated as one contiguous target |
 
-> **Current behaviour:** Only priority 1 (explicit `exon`) and priority 4 (full-sequence fallback) are active. Priorities 2 and 3 are reserved for future activation.
+> **Current behaviour:** Only priority 1 (explicit `exon`) and priority 4 (full-sequence fallback) are active. Priorities 2 and 3 are reserved for future activation. When promoter targeting is enabled (see [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting)), transcript features (`mRNA` / `ncRNA`) are additionally parsed to locate each transcript's TSS.
 
 ### GenBank Coordinate Conventions
 
@@ -585,6 +593,54 @@ GenBank:  a..b        (1-based, inclusive)
 Internal: [a−1, b)    (0-based, exclusive end)
 
 Example:  5049..5095  →  [5048, 5095)    length = 47 bp
+```
+
+---
+
+## Promoter & Upstream-Region Targeting
+
+Beyond exons and other transcribed features, PCRpanel can design primers for **promoter / upstream regulatory regions** that lie immediately 5′ of a transcript's **transcription start site (TSS)**. This is useful for amplifying core promoters, proximal regulatory elements, CpG islands, and 5′ non-coding variants that fall *outside* the transcribed sequence and are therefore missed by exon-only targeting.
+
+### Enabling promoter targeting
+
+Set the `promoter` parameter to the desired upstream length, in base pairs. A value of `0` (or omitting the parameter) disables it:
+
+```ini
+# Add a 1000 bp promoter target upstream of each transcript's TSS
+promoter=1000
+```
+
+| Parameter | Description | Default |
+|---|---|---|
+| `promoter` | Length (bp) of the upstream promoter region added as a target, measured from each transcript's TSS. `0` or omitted disables promoter targeting. | `0` *(off)* |
+
+### How the promoter region is derived
+
+The TSS is taken from the first exon of each transcript (`mRNA` / `ncRNA` `join(…)` feature) and the promoter window is placed in a **strand-aware** manner:
+
+| Strand | TSS position | Promoter window (1-based, inclusive) |
+|---|---|---|
+| Forward (`+`) | start of the first exon | `[TSS − promoter, TSS − 1]` |
+| Reverse (`−`) | end of the last exon (highest coordinate) | `[TSS + 1, TSS + promoter]` |
+
+- **Clamped to sequence bounds** — a transcript whose TSS sits at the very edge of the record yields a shorter promoter, or none at all when there is no upstream room.
+- **Requires transcript annotation** — the TSS is located from `mRNA` / `ncRNA` features. Records supplied as bare sequence (FASTA fallback) have no annotated TSS and are skipped for promoter design.
+- **Variant merging** — when several transcript variants of the same gene have overlapping promoter windows, the windows are merged into a single non-redundant target so the region is not amplified twice.
+
+> **Note:** `promoter` works *alongside* exon targeting — promoter and exon amplicons are designed in the same run. Combine it with `multiplex=true` to pool the promoter amplicons together with the rest of the panel.
+
+### Example — exon panel plus promoter coverage
+
+```ini
+target_path=/data/genes/COL4A5.gb
+
+# Standard exon panel
+multiplex=true
+minPCR=250
+maxPCR=500
+
+# Also tile a 1 kb promoter region upstream of the TSS
+promoter=1000
 ```
 
 ---
@@ -722,6 +778,23 @@ minPCR=250
 maxPCR=500
 ```
 
+### 6. Promoter / Regulatory-Region Panels
+
+Amplify the regulatory landscape upstream of a gene — core promoters, CpG islands, and 5′ variants — by adding a promoter window to your targets. Promoter and exon amplicons are designed together in one panel:
+
+```ini
+target_path=/data/genes/COL4A5.gb
+
+multiplex=true
+minPCR=250
+maxPCR=500
+
+# 1 kb promoter upstream of each transcript's TSS
+promoter=1000
+```
+
+See [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting) for strand handling and clamping details.
+
 ---
 
 ## Best Practices
@@ -830,6 +903,9 @@ If `folder_out` points to an existing directory, PCRpanel **deletes its contents
 
 **Q: Can PCRpanel design primers for non-human genomes?**
 Yes. PCRpanel is organism-agnostic. Any GenBank or FASTA sequence can be used as input — viral, bacterial, plant, or animal.
+
+**Q: Can PCRpanel design primers for promoter / upstream regions?**
+Yes. Set `promoter=<bp>` (e.g., `promoter=1000`) to add a target window upstream of each transcript's TSS. The window is strand-aware and clamped to the sequence bounds; transcript annotation (`mRNA` / `ncRNA`) is required so the TSS can be located. Promoter and exon amplicons are designed together in the same run. See [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting).
 
 **Q: What is linguistic complexity, and why filter on it?**
 Linguistic complexity measures sequence diversity on a 0–100% scale. Low-complexity regions (e.g., `AAAAAAA` or `ATATATATAT`) make poor primer binding sites because they can hybridise to many genomic locations. The default threshold of 80% filters out these regions. This criterion indirectly indicates the effectiveness of the PCR primer and its uniqueness.
