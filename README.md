@@ -555,7 +555,7 @@ Many RefSeq/GenBank records lack explicit `exon` features. PCRpanel applies a ti
 | Priority | Feature Type | Status | Notes |
 |---|---|---|---|
 | 1 | `exon` | ✅ Active | Used directly when present |
-| 2 | `mRNA`, `ncRNA`, `rRNA`, `tRNA` | ⏸ Suspended | `join(…)` blocks would be extracted as exon coordinates |
+| 2 | `mRNA`, `ncRNA`, `rRNA`, `tRNA` | ✅ Active | `join(…)` blocks would be extracted as exon coordinates |
 | 3 | `CDS` | ⏸ Suspended | `join(…)` blocks used when transcript features are absent |
 | 4 | *Full-sequence fallback* | ✅ Active | Entire sequence treated as one contiguous target |
 
