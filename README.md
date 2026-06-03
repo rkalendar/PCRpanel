@@ -687,7 +687,7 @@ Each candidate is evaluated against thermodynamic criteria:
 
 ### Stage 3 — Specificity Screening
 
-- **Repeat filtering** — Candidates that bind to repeated sequences in the target are penalised or rejected.
+- **Repeat filtering** — Candidates that bind to repeated sequences in the target are rejected.
 - **Genome alignment** *(optional, requires `genome_path`)* — Candidates are aligned against the reference genome to detect off-target binding sites, gene duplications, and paralogous regions.
 
 ### Stage 4 — Amplicon Assembly & Pooling
@@ -721,7 +721,7 @@ Each primer entry in the report includes:
 | **Sequence** | Bare primer sequence (5′→3′) |
 | **Length** | Primer length in nucleotides |
 | **Tm** | Predicted melting temperature (°C), calculated using the nearest-neighbour method |
-| **GC%** | GC content as a percentage |
+| **GC%** | GC content as a percentage (0–100%) |
 | **LC%** | Linguistic complexity (0–100%) |
 | **Amplicon start–end** | Genomic coordinates of the resulting amplicon |
 | **Amplicon size** | Amplicon length in base pairs |
