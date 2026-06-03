@@ -20,6 +20,7 @@
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Getting Help](#getting-help)
 - [Quick Reference](#quick-reference)
 - [Memory Configuration](#memory-configuration)
 - [Configuration Reference](#configuration-reference)
@@ -193,11 +194,32 @@ Primer reports and pool assignments are written alongside your input files (or t
 
 ---
 
+## Getting Help
+
+PCRpanel ships with a **built-in help screen** that lists every control command available in the configuration file, together with its default value and accepted range. No configuration file is required to display it.
+
+```bash
+# Any of these prints the full command reference and exits:
+java -jar PCRpanel.jar -help
+java -jar PCRpanel.jar /?
+java -jar PCRpanel.jar --help
+java -jar PCRpanel.jar -h
+```
+
+Running PCRpanel **with no arguments** prints the same help screen.
+
+The output is grouped by category — input/output paths, file masks, panel mode, amplicon size, primer constraints, and adapter tails — and ends with a minimal, copy-paste-ready configuration example. Use it as a quick reminder of command names and defaults without opening this document.
+
+---
+
 ## Quick Reference
 
 A cheat-sheet of common commands:
 
 ```bash
+# Show the built-in command reference (no config file needed)
+java -jar PCRpanel.jar -help        # or:  /?   --help   -h
+
 # Single gene, default parameters
 java -jar PCRpanel.jar config.file
 
