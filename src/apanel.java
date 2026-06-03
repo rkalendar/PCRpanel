@@ -8,45 +8,46 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 public class apanel {
 
     // ========================== CONFIG CLASS ==========================
-
     /**
      * Holds all primer-design parameters parsed from the configuration file.
      * Replaces 15+ loose local variables with a single, passable object.
      */
     static class PrimerConfig {
+
         int minPcr = 60;
         int maxPcr = 600;
-        int minTm  = 60;
-        int maxTm  = 62;
+        int minTm = 60;
+        int maxTm = 62;
         int minLen = 18;
         int maxLen = 25;
-        int prLap  = 12;   // 0-18
-        int minLc  = 70;
-        String e5     = "n";
-        String e3     = "w";
-        String fTail  = "";
-        String rTail  = "";
+        int prLap = 12;   // 0-18
+        int minLc = 75;
+        String e5 = "n";
+        String e3 = "w";
+        String fTail = "";
+        String rTail = "";
         String outPath = null;
-
-        boolean homology  = false;
+        public String[] tagMasks = {"*.*"};
+        public String[] genomeMasks = {"*.*"};
+        boolean homology = false;
         boolean multiplex = true;
     }
 
     // ========================== HELPERS ==========================
-
-    /** Clamp value into [min, max]. */
+    /**
+     * Clamp value into [min, max].
+     */
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
     /**
-     * Extract the value portion after the FIRST '=' on the line.
-     * Returns "" if no '=' is found.
+     * Extract the value portion after the FIRST '=' on the line. Returns "" if
+     * no '=' is found.
      */
     private static String valueAfterEquals(String line) {
         int idx = line.indexOf('=');
@@ -54,8 +55,8 @@ public class apanel {
     }
 
     /**
-     * Parse an integer parameter from a config line that starts with the given key.
-     * Returns null if the line doesn't contain the key.
+     * Parse an integer parameter from a config line that starts with the given
+     * key. Returns null if the line doesn't contain the key.
      */
     private static Integer parseIntParam(String line, String key) {
         if (!line.contains(key)) {
@@ -66,20 +67,29 @@ public class apanel {
     }
 
     /**
-     * Build the concatenation of all sequences EXCEPT the one at index {@code excludeIdx}.
+     * Build the concatenation of all sequences EXCEPT the one at index
+     * {@code excludeIdx}.
      */
     private static String buildOtherSequences(List<String> sequences, int excludeIdx) {
         int totalLen = 0;
         for (int j = 0; j < sequences.size(); j++) {
-            if (j == excludeIdx) continue;
+            if (j == excludeIdx) {
+                continue;
+            }
             String s = sequences.get(j);
-            if (s != null) totalLen += s.length();
+            if (s != null) {
+                totalLen += s.length();
+            }
         }
         StringBuilder sb = new StringBuilder(totalLen);
         for (int j = 0; j < sequences.size(); j++) {
-            if (j == excludeIdx) continue;
+            if (j == excludeIdx) {
+                continue;
+            }
             String s = sequences.get(j);
-            if (s != null) sb.append(s);
+            if (s != null) {
+                sb.append(s);
+            }
         }
         return sb.toString();
     }
@@ -110,18 +120,21 @@ public class apanel {
     }
 
     /**
-     * Read and concatenate reference FASTA file(s) into a single cleaned sequence string.
+     * Read and concatenate reference FASTA file(s) into a single cleaned
+     * sequence string.
      */
     private static String readReferenceSequences(List<String> refFiles) {
-        if (refFiles.isEmpty()) return "";
+        if (refFiles.isEmpty()) {
+            return "";
+        }
 
         StringBuilder refBuilder = new StringBuilder(1 << 20);
         for (String refFile : refFiles) {
             try (BufferedReader br = new BufferedReader(
                     new InputStreamReader(
                             refFile.endsWith(".gz")
-                                    ? new java.util.zip.GZIPInputStream(new FileInputStream(refFile))
-                                    : new FileInputStream(refFile),
+                            ? new java.util.zip.GZIPInputStream(new FileInputStream(refFile))
+                            : new FileInputStream(refFile),
                             java.nio.charset.StandardCharsets.UTF_8), 1 << 16)) {
 
                 String line;
@@ -141,13 +154,15 @@ public class apanel {
     }
 
     /**
-     * Load sequence + name + exons from a tagfile, with FASTA fallback.
-     * Returns null if no valid sequence is found.
+     * Load sequence + name + exons from a tagfile, with FASTA fallback. Returns
+     * null if no valid sequence is found.
      */
     private static class SeqRecord {
+
         final String sequence;
         final String name;
         final int[] exons;
+
         SeqRecord(String sequence, String name, int[] exons) {
             this.sequence = sequence;
             this.name = name;
@@ -169,8 +184,8 @@ public class apanel {
         }
 
         // FASTA fallback — use last valid record
-        List<FastaIO.FastaRecord> records =
-                FastaIO.readAllToList(java.util.Collections.singletonList(tagFile));
+        List<FastaIO.FastaRecord> records
+                = FastaIO.readAllToList(java.util.Collections.singletonList(tagFile));
         for (FastaIO.FastaRecord rec : records) {
             if (rec != null && rec.sequence != null && !rec.sequence.isBlank()) {
                 String recName = (rec.id != null && !rec.id.isBlank()) ? rec.id : name;
@@ -184,39 +199,58 @@ public class apanel {
         return null; // nothing found
     }
 
-    // ========================== CONFIG PARSING ==========================
+    private static String[] splitMasks(String s) {
+        if (s == null || s.isBlank()) {
+            return new String[]{"*.*"};
+        }
+        return java.util.Arrays.stream(s.split("[,;|]"))
+                .map(String::trim)
+                .filter(p -> !p.isEmpty())
+                // "fna" -> "*.fna"; "*.fna" / "name_*.fa" оставляем как есть
+                .map(p -> p.contains("*") || p.contains("?") ? p : "*." + p)
+                .toArray(String[]::new);
+    }
 
+    private static void dedupInPlace(List<String> list) {
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>(list);
+        list.clear();
+        list.addAll(set);
+    }
+
+    // ========================== CONFIG PARSING ==========================
     /**
      * Parse the configuration file and populate all settings.
      */
     private static PrimerConfig parseConfig(String infile,
-                                            List<String> tagfiles,
-                                            List<String> reffiles,
-                                            List<String> genomefiles,
-                                            /* out */ String[] primerFileHolder) throws Exception {
+            List<String> tagfiles,
+            List<String> reffiles,
+            List<String> genomefiles,
+            /* out */ String[] primerFileHolder) throws Exception {
         PrimerConfig cfg = new PrimerConfig();
+
+        // NEW: собираем папки во временные списки — раскроем после того, как узнаем маски
+        List<String> tagFolders = new ArrayList<>();
+        List<String> genomeFolders = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(new FileReader(infile))) {
             String line;
             while ((line = br.readLine()) != null) {
-                String cline = line;       // preserve original case for paths
-                line = line.toLowerCase();  // lowercase for key matching
+                String cline = line;
+                line = line.toLowerCase();
 
                 // --- Path-based parameters ---
                 Path folderPath = validatePath(cline, "folder_path=", true, false);
                 if (folderPath != null) {
                     String s = cline.substring(cline.indexOf("folder_path=") + "folder_path=".length()).trim();
                     System.out.println("Target_Folder_path=" + s);
-                    String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
-                    tagfiles.addAll(List.of(files));
+                    tagFolders.add(s);                                  // CHANGED: было BatchReadFiles здесь
                 }
 
                 Path genomePath = validatePath(cline, "genome_path=", true, false);
                 if (genomePath != null) {
                     String s = cline.substring(cline.indexOf("genome_path=") + "genome_path=".length()).trim();
                     System.out.println("Genome_path=" + genomePath);
-                    String[] files = new BatchReadFiles().BatchReadFiles(new String[]{s, "*.*"});
-                    genomefiles.addAll(List.of(files));
+                    genomeFolders.add(s);                               // CHANGED
                 }
 
                 Path outDir = validatePath(cline, "folder_out=", true, true);
@@ -236,8 +270,25 @@ public class apanel {
 
                 Path refFile = validatePath(cline, "reference_path=", false, false);
                 if (refFile != null) {
-                    System.out.println("Reference_file_path= " + refFile);  // BUG FIX: was printing outDir
+                    System.out.println("Reference_file_path= " + refFile);
                     reffiles.add(refFile.toString());
+                }
+
+                // NEW: маски файлов
+                if (line.startsWith("target_mask=") || line.startsWith("folder_mask=")) {
+                    cfg.tagMasks = splitMasks(valueAfterEquals(line));
+                    System.out.println("Target_mask=" + String.join(",", cfg.tagMasks));
+                }
+                if (line.startsWith("genome_mask=")) {
+                    cfg.genomeMasks = splitMasks(valueAfterEquals(line));
+                    System.out.println("Genome_mask=" + String.join(",", cfg.genomeMasks));
+                }
+                // Опционально: общая маска, если пользователь хочет одну на всё
+                if (line.startsWith("file_mask=")) {
+                    String[] m = splitMasks(valueAfterEquals(line));
+                    cfg.tagMasks = m;
+                    cfg.genomeMasks = m;
+                    System.out.println("File_mask=" + String.join(",", m));
                 }
 
                 // --- Boolean flags ---
@@ -250,7 +301,7 @@ public class apanel {
                     System.out.println(cfg.multiplex ? "Multiplex two panel design" : "Single-plex panel design");
                 }
 
-                // --- String parameters (use startsWith to avoid partial matches) ---
+                // --- String parameters ---
                 if (line.startsWith("3end=")) {
                     cfg.e3 = valueAfterEquals(line);
                     System.out.println("3End=" + cfg.e3);
@@ -274,24 +325,59 @@ public class apanel {
 
                 // --- Numeric parameters with clamping ---
                 Integer v;
-                if ((v = parseIntParam(line, "minpcr=")) != null) cfg.minPcr = clamp(v, 30, 5000);
-                if ((v = parseIntParam(line, "maxpcr=")) != null) cfg.maxPcr = clamp(v, 30, 50000);
-                if ((v = parseIntParam(line, "minlen=")) != null) cfg.minLen = clamp(v, 12, 80);
-                if ((v = parseIntParam(line, "maxlen=")) != null) cfg.maxLen = clamp(v, 12, 100);
-                if ((v = parseIntParam(line, "mintm="))  != null) cfg.minTm  = clamp(v, 40, 75);
-                if ((v = parseIntParam(line, "maxtm="))  != null) cfg.maxTm  = clamp(v, 40, 80);
+                if ((v = parseIntParam(line, "minpcr=")) != null) {
+                    cfg.minPcr = clamp(v, 30, 5000);
+                }
+                if ((v = parseIntParam(line, "maxpcr=")) != null) {
+                    cfg.maxPcr = clamp(v, 30, 50000);
+                }
+                if ((v = parseIntParam(line, "minlen=")) != null) {
+                    cfg.minLen = clamp(v, 12, 80);
+                }
+                if ((v = parseIntParam(line, "maxlen=")) != null) {
+                    cfg.maxLen = clamp(v, 12, 100);
+                }
+                if ((v = parseIntParam(line, "mintm=")) != null) {
+                    cfg.minTm = clamp(v, 40, 75);
+                }
+                if ((v = parseIntParam(line, "maxtm=")) != null) {
+                    cfg.maxTm = clamp(v, 40, 80);
+                }
             }
         } catch (IOException e) {
             System.err.println("Error reading config file '" + infile + "': " + e.getMessage());
         }
+
+        // NEW: раскрываем папки уже с учётом масок
+        BatchReadFiles brf = new BatchReadFiles();
+        for (String folder : tagFolders) {
+            for (String mask : cfg.tagMasks) {
+                String[] files = brf.BatchReadFiles(new String[]{folder, mask});
+                if (files != null && files.length > 0) {
+                    tagfiles.addAll(List.of(files));
+                    System.out.println("Matched " + files.length + " file(s) for " + folder + " / " + mask);
+                }
+            }
+        }
+        for (String folder : genomeFolders) {
+            for (String mask : cfg.genomeMasks) {
+                String[] files = brf.BatchReadFiles(new String[]{folder, mask});
+                if (files != null && files.length > 0) {
+                    genomefiles.addAll(List.of(files));
+                    System.out.println("Matched " + files.length + " file(s) for " + folder + " / " + mask);
+                }
+            }
+        }
+        dedupInPlace(tagfiles);
+        dedupInPlace(genomefiles);
+
         return cfg;
     }
 
     // ========================== SINGLE-PLEX ==========================
-
-    private static void runSingleplexAll(Set<Long> map, List<String> tagfiles,
-                                         PrimerConfig cfg, String refsequence,
-                                         String[] primers) throws Exception {
+    private static void runSingleplexAll(LongIntHashMap map, List<String> tagfiles,
+            PrimerConfig cfg, String refsequence,
+            String[] primers) throws Exception {
         final String ref = "";
         for (String tagfile : tagfiles) {
             ExonPromoterExtractor ex = new ExonPromoterExtractor(tagfile);
@@ -300,12 +386,16 @@ public class apanel {
 
             // FASTA fallback
             if (sequence == null || sequence.isBlank()) {
-                List<FastaIO.FastaRecord> records =
-                        FastaIO.readAllToList(java.util.Collections.singletonList(tagfile));
-                if (records.isEmpty()) continue;
+                List<FastaIO.FastaRecord> records
+                        = FastaIO.readAllToList(java.util.Collections.singletonList(tagfile));
+                if (records.isEmpty()) {
+                    continue;
+                }
 
                 for (FastaIO.FastaRecord rec : records) {
-                    if (rec == null || rec.sequence == null || rec.sequence.isBlank()) continue;
+                    if (rec == null || rec.sequence == null || rec.sequence.isBlank()) {
+                        continue;
+                    }
                     String recName = (rec.id != null && !rec.id.isBlank()) ? rec.id : name;
                     int[] exons = new int[]{0, rec.sequence.length()};
                     RunSingleplexPanelDesign(map, tagfile, cfg.outPath, rec.sequence, recName,
@@ -329,18 +419,19 @@ public class apanel {
     }
 
     // ========================== MULTIPLEX ==========================
-
-    private static void runMultiplexAll(Set<Long> map, List<String> tagfiles,
-                                        PrimerConfig cfg, String refsequence,
-                                        String[] primers) throws Exception {
-        List<String> sequences     = new ArrayList<>();
+    private static void runMultiplexAll(LongIntHashMap map, List<String> tagfiles,
+            PrimerConfig cfg, String refsequence,
+            String[] primers) throws Exception {
+        List<String> sequences = new ArrayList<>();
         List<String> nameSequences = new ArrayList<>();
-        List<int[]>  exonsSequences = new ArrayList<>();
+        List<int[]> exonsSequences = new ArrayList<>();
 
         // Phase 1: load all sequences
         for (String tagfile : tagfiles) {
             SeqRecord rec = loadSequenceRecord(tagfile);
-            if (rec == null) continue;
+            if (rec == null) {
+                continue;
+            }
             sequences.add(rec.sequence);
             nameSequences.add(rec.name);
             exonsSequences.add(rec.exons);
@@ -350,10 +441,12 @@ public class apanel {
         int nseq = sequences.size();
         for (int i = 0; i < nseq; i++) {
             String sequence = sequences.get(i);
-            if (sequence == null || sequence.isEmpty()) continue;
+            if (sequence == null || sequence.isEmpty()) {
+                continue;
+            }
 
-            String name    = nameSequences.get(i);
-            int[]  exons   = exonsSequences.get(i);
+            String name = nameSequences.get(i);
+            int[] exons = exonsSequences.get(i);
             String tagfile = tagfiles.get(i);
             String otherSeqs = buildOtherSequences(sequences, i);
 
@@ -367,11 +460,145 @@ public class apanel {
         }
     }
 
-    // ========================== MAIN ==========================
+    // ========================== HELP / USAGE ==========================
 
+    /** Application name used in help/usage output. */
+    private static final String APP_NAME = "PCRpanel";
+
+    /**
+     * Returns {@code true} if the supplied command-line argument is a request
+     * for help, e.g. {@code "/?"}, {@code "-help"}, {@code "--help"},
+     * {@code "-h"}, {@code "?"} or {@code "help"} (case-insensitive).
+     */
+    private static boolean isHelpRequested(String arg) {
+        if (arg == null) {
+            return false;
+        }
+        switch (arg.trim().toLowerCase()) {
+            case "/?":
+            case "?":
+            case "-?":
+            case "-h":
+            case "/h":
+            case "-help":
+            case "--help":
+            case "/help":
+            case "help":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** Format a single "key — description" line for the help screen. */
+    private static String helpRow(String key, String desc) {
+        return String.format("  %-24s %s%n", key, desc);
+    }
+
+    /**
+     * Print program usage together with the full list of control commands that
+     * can be placed in the configuration file. Triggered by {@code "/?"},
+     * {@code "-help"} (and common variants), or when no configuration file is
+     * supplied on the command line.
+     */
+    private static void printHelp() {
+        String nl = System.lineSeparator();
+        StringBuilder h = new StringBuilder(4096);
+
+        h.append(APP_NAME).append(" - Custom Amplicon Panel Designer").append(nl);
+        h.append("Designs custom multiplex / singleplex PCR amplicon panels for NGS and ONT.").append(nl);
+        h.append("Documentation: https://primerdigital.com/tools/panel.html").append(nl);
+        h.append(nl);
+
+        h.append("USAGE").append(nl);
+        h.append("  java -jar PCRpanel.jar <config-file>").append(nl);
+        h.append("  java -jar PCRpanel.jar (-help | /?)").append(nl);
+        h.append(nl);
+        h.append("  <config-file>   Plain-text configuration file holding all control").append(nl);
+        h.append("                  commands. Its name and extension do not matter").append(nl);
+        h.append("                  (e.g. config.file, my_panel.conf, run.txt).").append(nl);
+        h.append(nl);
+        h.append("  For large reference genomes raise the JVM heap, e.g.:").append(nl);
+        h.append("    java -Xms8g -Xmx32g -jar PCRpanel.jar config.file").append(nl);
+        h.append(nl);
+
+        h.append("CONFIGURATION FILE FORMAT").append(nl);
+        h.append("  Write one command per line as:  key=value").append(nl);
+        h.append("  Commands may appear in any order. Blank lines, lines starting with '#',").append(nl);
+        h.append("  and any unrecognised text are ignored, so notes can be kept in the file.").append(nl);
+        h.append("  Path commands (target_path, reference_path) may be repeated.").append(nl);
+        h.append("  Keys are case-insensitive; out-of-range numbers are clamped to the limit.").append(nl);
+        h.append(nl);
+
+        h.append("INPUT / OUTPUT").append(nl);
+        h.append(helpRow("target_path=FILE",    "Target GenBank/FASTA file. Repeatable."));
+        h.append(helpRow("target_primers=FILE", "Existing primer/probe list to incorporate."));
+        h.append(helpRow("reference_path=FILE", "Reference sequence file. Repeatable."));
+        h.append(helpRow("folder_path=DIR",     "Folder of target files (subfolders included)."));
+        h.append(helpRow("genome_path=DIR",     "Folder of reference-genome FASTA files (subfolders)."));
+        h.append(helpRow("folder_out=DIR",      "Output folder. Created if missing; if it already"));
+        h.append(helpRow("",                    "exists its CONTENTS ARE DELETED and replaced."));
+        h.append(nl);
+
+        h.append("FILE MASKS  (restrict which files are read from a folder)").append(nl);
+        h.append(helpRow("target_mask=MASK",    "Mask for folder_path. Alias: folder_mask. Default *.*"));
+        h.append(helpRow("genome_mask=MASK",    "Mask for genome_path. Default *.*"));
+        h.append(helpRow("file_mask=MASK",      "Apply one mask to both folders."));
+        h.append("    Forms: *.fna  |  fna (=> *.fna)  |  fna,fasta,gb  |  *.fna;*.gb").append(nl);
+        h.append(nl);
+
+        h.append("PANEL MODE").append(nl);
+        h.append(helpRow("multiplex=true|false", "Two overlapping multiplex pools. Default true."));
+        h.append(helpRow("homology=true|false",  "Consensus primers from regions shared across inputs."));
+        h.append(helpRow("",                     "Default false."));
+        h.append(nl);
+
+        h.append("AMPLICON SIZE (bp)").append(nl);
+        h.append(helpRow("minPCR=INT",          "Min amplicon size. Default 60.  Range 30-5000."));
+        h.append(helpRow("maxPCR=INT",          "Max amplicon size. Default 600. Range 30-50000."));
+        h.append(nl);
+
+        h.append("PRIMER CONSTRAINTS").append(nl);
+        h.append(helpRow("minLen=INT",          "Min primer length (nt). Default 18. Range 12-80."));
+        h.append(helpRow("maxLen=INT",          "Max primer length (nt). Default 25. Range 12-100."));
+        h.append(helpRow("minTm=INT",           "Min melting temperature (\u00B0C). Default 60. Range 40-75."));
+        h.append(helpRow("maxTm=INT",           "Max melting temperature (\u00B0C). Default 62. Range 40-80."));
+        h.append(helpRow("3end=CODE",           "3' terminal base (IUPAC). Default w."));
+        h.append(helpRow("5end=CODE",           "5' terminal base (IUPAC). Default n (any base)."));
+        h.append("    IUPAC: w=A/T  s=G/C  n=any;  r y m k b d h v also accepted.").append(nl);
+        h.append(nl);
+
+        h.append("ADAPTER TAILS").append(nl);
+        h.append(helpRow("forwardtail=SEQ",     "5' adapter/tail prepended to forward primers."));
+        h.append(helpRow("reversetail=SEQ",     "5' adapter/tail prepended to reverse primers."));
+        h.append(nl);
+
+        h.append("EXAMPLE (minimal configuration file)").append(nl);
+        h.append("  target_path=/data/genes/NG_013019.gb").append(nl);
+        h.append("  target_path=/data/genes/NG_011731.gb").append(nl);
+        h.append("  multiplex=true").append(nl);
+        h.append("  minPCR=250").append(nl);
+        h.append("  maxPCR=500").append(nl);
+        h.append("  minLen=18").append(nl);
+        h.append("  maxLen=24").append(nl);
+        h.append("  minTm=60").append(nl);
+        h.append("  maxTm=62").append(nl);
+        h.append("  3end=w").append(nl);
+        h.append("  forwardtail=ACACTCTTTCCCTACACGACGCTCTTCCGATCT").append(nl);
+        h.append("  reversetail=GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT").append(nl);
+        h.append(nl);
+        h.append("Then run:  java -jar PCRpanel.jar <your-config-file>").append(nl);
+        h.append("See the README for full details, more examples, and best practices.").append(nl);
+
+        System.out.println(h);
+    }
+
+    // ========================== MAIN ==========================
     public static void main(String[] args) throws IOException, Exception {
-        if (args.length == 0) {
-            System.err.println("Usage: <program> <config-file>");
+        // Show help for "/?", "-help", "--help", "-h" (and variants), or when
+        // no configuration file is supplied on the command line.
+        if (args.length == 0 || isHelpRequested(args[0])) {
+            printHelp();
             return;
         }
 
@@ -380,8 +607,8 @@ public class apanel {
         System.out.println("Command-line arguments: " + infile);
 
         // Mutable lists populated by parseConfig
-        List<String> tagfiles    = new ArrayList<>();
-        List<String> reffiles    = new ArrayList<>();
+        List<String> tagfiles = new ArrayList<>();
+        List<String> reffiles = new ArrayList<>();
         List<String> genomefiles = new ArrayList<>();
         String[] primerFileHolder = {""};  // single-element array to allow mutation
 
@@ -396,7 +623,7 @@ public class apanel {
 
         // 4. Build genome hash-map
         long startTime = System.nanoTime();
-        Set<Long> map = GenomeReference(genomefiles);
+        LongIntHashMap map = GenomeReference(genomefiles);
         long duration = (System.nanoTime() - startTime) / 1_000_000_000;
         if (!map.isEmpty()) {
             System.out.println("Genome repeat searching, time taken: " + duration + " seconds\n");
@@ -413,7 +640,6 @@ public class apanel {
         duration = (System.nanoTime() - startTime) / 1_000_000_000;
         System.out.println("Time taken: " + duration + " seconds\n");
     }
-
 
     /**
      * Converts Region list to [start1,end1,start2,end2,...] with basic
@@ -449,7 +675,7 @@ public class apanel {
         return exons;
     }
 
-    private static String[] RunMultiplexPanelDesign(Set<Long> map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
+    private static String[] RunMultiplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
         Path in = Paths.get(tagfile);
         // String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
         String stem = fileStem(in);
@@ -488,6 +714,7 @@ public class apanel {
             sr.append("min Tm=").append(mintm).append("\n");
             sr.append("max Tm=").append(maxtm).append("\n");
             sr.append("min length=").append(minlen).append("\n");
+            sr.append("max length=").append(maxlen).append("\n");
 
             if (e3.length() > 0) {
                 sr.append("3-end=").append(e3).append("\n");
@@ -704,7 +931,7 @@ public class apanel {
         return (dot > 0) ? name.substring(0, dot) : name;
     }
 
-    private static void RunSingleplexPanelDesign(Set<Long> map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
+    private static void RunSingleplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
         Path in = Paths.get(tagfile);
         String stem = fileStem(in);
         //String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
@@ -833,8 +1060,7 @@ public class apanel {
                     sr.append(sr2);
                 }
             }
-
-            
+/*
             try (FileWriter fileWriter = new FileWriter(primerlistfile.toFile())) {
                 System.out.println("Saving the primer list report to a file: " + primerlistfile);
                 fileWriter.write(sr.toString());
@@ -846,7 +1072,7 @@ public class apanel {
                     fileWriter.write(srpanel.toString());
                 }
             }
- 
+*/
             if (!pcrcol.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
@@ -859,7 +1085,7 @@ public class apanel {
         }
     }
 
-    static Set<Long> GenomeReference(List<String> genomefiles) throws IOException {
+    static LongIntHashMap GenomeReference(List<String> genomefiles) throws IOException {
         List<String> seqs = new ArrayList<>();  // Initialize the list
 
         for (String files : genomefiles) {
@@ -876,7 +1102,7 @@ public class apanel {
         }
 
         MaskingSequences ms = new MaskingSequences();
-        return ms.mask(seqs.toArray(String[]::new), 19);
+        return ms.mask(seqs.toArray(String[]::new), 18);//int GENOME_KMER_SIZE = 18;
     }
 
     private static Path validatePath(String line, String key, boolean isDirectory, boolean allowMissing) {
