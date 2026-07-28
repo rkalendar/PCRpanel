@@ -27,7 +27,6 @@
 - [Adapter & Tail Sequences](#adapter--tail-sequences)
 - [Input Formats](#input-formats)
 - [Target Region Detection](#target-region-detection)
-- [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting)
 - [Primer Design Algorithm](#primer-design-algorithm)
 - [Output Files](#output-files)
 - [Use Cases](#use-cases)
@@ -47,8 +46,7 @@
 | **Multiplex tiling PCR** | Designs two overlapping pools of amplicons for complete, gap-free target coverage |
 | **Single-plex mode** | Non-multiplexed primer design for simpler workflows |
 | **Any-scale input** | Works with sequences of any length and any number of targets |
-| **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
-| **Promoter targeting** | Designs primers for a configurable upstream region 5′ of each transcript's transcription start site (TSS) |
+| **Annotation-driven targeting** | Uses the `exon` features of a GenBank record as the target regions; a FASTA record, or a GenBank file without exon annotation, is targeted end to end |
 | **Homology mode** | Designs common (consensus) primers from shared regions across multiple input files |
 | **Existing primer import** | Starts from your current primer/probe list and fills gaps |
 | **Repeat filtering** | Avoids off-target amplification by masking repeated sequences |
@@ -270,22 +268,34 @@ java -Xms16g -Xmx64g -jar PCRpanel.jar config.file
 
 ## Configuration Reference
 
-All parameters are specified in a plain-text configuration file. Lines beginning with `#` are comments.
+All parameters are specified in a plain-text configuration file, one `key=value` per line, in any
+order. Keys are case-insensitive and the file name and extension do not matter.
+
+> ⚠️ **A `#` does not disable a parameter.** Each line is searched for the parameter names it may
+> contain, wherever they appear, so `# minPCR=1234` is read exactly as `minPCR=1234` would be.
+> Comments are safe only when they contain no `key=value` text — write `# amplicon size follows`,
+> and **delete** a setting you want to switch off rather than commenting it out. The header of the
+> primer report lists the values a run actually used; check it if a result looks unexpected.
 
 ### Primer & Amplicon Parameters
 
-| Parameter | Description | Default |
-|---|---|---|
-| `minPCR` | Minimum amplicon size (bp) | `250` |
-| `maxPCR` | Maximum amplicon size (bp) | `500` |
-| `minLen` | Minimum primer length (nt) | `18` |
-| `maxLen` | Maximum primer length (nt) | `24` |
-| `minTm` | Minimum melting temperature (°C) | `60` |
-| `maxTm` | Maximum melting temperature (°C) | `62` |
-| `3end` | 3′ end constraint (see [End Constraints](#end-constraints)) | `w` |
-| `5end` | 5′ end constraint (see [End Constraints](#end-constraints)) | *(none)* |
-| `forwardtail` | 5′ adapter tail appended to forward primers | Illumina P5 |
-| `reversetail` | 5′ adapter tail appended to reverse primers | Illumina P7 |
+| Parameter | Description | Default | Range |
+|---|---|---|---|
+| `minPCR` | Minimum amplicon size (bp) | `60` | 30–5000 |
+| `maxPCR` | Maximum amplicon size (bp) | `600` | 30–50000 |
+| `minLen` | Minimum primer length (nt) | `18` | 12–80 |
+| `maxLen` | Maximum primer length (nt) | `25` | 12–100 |
+| `minTm` | Minimum melting temperature (°C) | `60` | 40–75 |
+| `maxTm` | Maximum melting temperature (°C) | `62` | 40–80 |
+| `3end` | 3′ end constraint (see [End Constraints](#end-constraints)) | `w` | IUPAC code |
+| `5end` | 5′ end constraint (see [End Constraints](#end-constraints)) | `n` *(any base)* | IUPAC code |
+| `forwardtail` | 5′ adapter tail prepended to forward primers | *(none)* | — |
+| `reversetail` | 5′ adapter tail prepended to reverse primers | *(none)* | — |
+
+A value outside its range is clamped to the nearest limit rather than rejected. No adapter tails
+are added unless `forwardtail` / `reversetail` are set — the Illumina adapters shown throughout this
+file are examples, not defaults. The values actually used are echoed to the console and repeated in
+the header of the primer report, which is the quickest way to confirm what a run applied.
 
 ### End Constraints
 
@@ -295,8 +305,8 @@ The `3end` and `5end` parameters control which nucleotides are permitted at the 
 |---|---|---|
 | `w` | A, T | Weak bases — the default for `3end`; avoids strong 3′ clamping that can promote mispriming |
 | `s` | G, C | Strong bases — enforces a GC clamp at the specified end |
-| `n` | A, T, G, C | Any base — no constraint |
-| *(empty)* | — | No filtering on that end (default for `5end`) |
+| `n` | A, T, G, C | Any base — no constraint; the default for `5end` |
+| *(empty)* | — | No filtering on that end |
 
 Other standard IUPAC codes (`r`, `y`, `m`, `k`, `b`, `d`, `h`, `v`) are also accepted.
 
@@ -307,17 +317,12 @@ Other standard IUPAC codes (`r`, `y`, `m`, `k`, `b`, `d`, `h`, `v`) are also acc
 | `multiplex` | Generate two overlapping, multiplex-compatible amplicon pools | `true` |
 | `homology` | Design consensus primers from shared sequences across input files | `false` |
 
-### Target Region
-
-| Parameter | Description | Default |
-|---|---|---|
-| `promoter` | Length (bp) of the upstream promoter region added as a target, measured from each transcript's TSS. `0` or omitted disables it. See [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting). | `0` *(off)* |
-
 ### Input / Output Paths
 
 | Parameter | Description | Repeatable? |
 |---|---|---|
 | `target_path` | Path to an individual GenBank or FASTA target file | Yes |
+| `reference_path` | Path to a reference sequence file used in the design | Yes |
 | `target_primers` | Path to an existing primer/probe list to incorporate | No |
 | `folder_path` | Directory of target files (subdirectories included) | No |
 | `folder_out` | Output directory for results | No |
@@ -581,7 +586,7 @@ Many RefSeq/GenBank records lack explicit `exon` features. PCRpanel applies a ti
 | 3 | `CDS` | ⏸ Suspended | `join(…)` blocks used when transcript features are absent |
 | 4 | *Full-sequence fallback* | ✅ Active | Entire sequence treated as one contiguous target |
 
-> **Current behaviour:** Only priority 1 (explicit `exon`) and priority 4 (full-sequence fallback) are active. Priorities 2 and 3 are reserved for future activation. When promoter targeting is enabled (see [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting)), transcript features (`mRNA` / `ncRNA`) are additionally parsed to locate each transcript's TSS.
+> **Current behaviour:** Only priority 1 (explicit `exon`) and priority 4 (full-sequence fallback) are active. Priorities 2 and 3 are reserved for future activation. A record therefore contributes either its annotated exons or, failing that, its whole sequence — regions outside the annotation, such as promoters or other upstream sequence, are targeted only when they are part of the record given to PCRpanel.
 
 ### GenBank Coordinate Conventions
 
@@ -619,53 +624,6 @@ Example:  5049..5095  →  [5048, 5095)    length = 47 bp
 
 ---
 
-## Promoter & Upstream-Region Targeting
-
-Beyond exons and other transcribed features, PCRpanel can design primers for **promoter / upstream regulatory regions** that lie immediately 5′ of a transcript's **transcription start site (TSS)**. This is useful for amplifying core promoters, proximal regulatory elements, CpG islands, and 5′ non-coding variants that fall *outside* the transcribed sequence and are therefore missed by exon-only targeting.
-
-### Enabling promoter targeting
-
-Set the `promoter` parameter to the desired upstream length, in base pairs. A value of `0` (or omitting the parameter) disables it:
-
-```ini
-# Add a 1000 bp promoter target upstream of each transcript's TSS
-promoter=1000
-```
-
-| Parameter | Description | Default |
-|---|---|---|
-| `promoter` | Length (bp) of the upstream promoter region added as a target, measured from each transcript's TSS. `0` or omitted disables promoter targeting. | `0` *(off)* |
-
-### How the promoter region is derived
-
-The TSS is taken from the first exon of each transcript (`mRNA` / `ncRNA` `join(…)` feature) and the promoter window is placed in a **strand-aware** manner:
-
-| Strand | TSS position | Promoter window (1-based, inclusive) |
-|---|---|---|
-| Forward (`+`) | start of the first exon | `[TSS − promoter, TSS − 1]` |
-| Reverse (`−`) | end of the last exon (highest coordinate) | `[TSS + 1, TSS + promoter]` |
-
-- **Clamped to sequence bounds** — a transcript whose TSS sits at the very edge of the record yields a shorter promoter, or none at all when there is no upstream room.
-- **Requires transcript annotation** — the TSS is located from `mRNA` / `ncRNA` features. Records supplied as bare sequence (FASTA fallback) have no annotated TSS and are skipped for promoter design.
-- **Variant merging** — when several transcript variants of the same gene have overlapping promoter windows, the windows are merged into a single non-redundant target so the region is not amplified twice.
-
-> **Note:** `promoter` works *alongside* exon targeting — promoter and exon amplicons are designed in the same run. Combine it with `multiplex=true` to pool the promoter amplicons together with the rest of the panel.
-
-### Example — exon panel plus promoter coverage
-
-```ini
-target_path=/data/genes/COL4A5.gb
-
-# Standard exon panel
-multiplex=true
-minPCR=250
-maxPCR=500
-
-# Also tile a 1 kb promoter region upstream of the TSS
-promoter=1000
-```
-
----
 
 ## Primer Design Algorithm
 
@@ -687,7 +645,7 @@ Each candidate is evaluated against thermodynamic criteria:
 
 ### Stage 3 — Specificity Screening
 
-- **Repeat filtering** — Candidates that bind to repeated sequences in the target are rejected.
+- **Repeat filtering** — Candidates that bind to repeated sequences in the target are penalised or rejected.
 - **Genome alignment** *(optional, requires `genome_path`)* — Candidates are aligned against the reference genome to detect off-target binding sites, gene duplications, and paralogous regions.
 
 ### Stage 4 — Amplicon Assembly & Pooling
@@ -702,30 +660,51 @@ If `forwardtail` or `reversetail` is specified, the adapter sequences are prepen
 
 ## Output Files
 
-PCRpanel generates the following output for each target:
+Reports are tab-delimited text, named after the input file and written next to it — or into
+`folder_out` when that is set. Each path is echoed to the console as it is saved.
 
-| File | Contents |
-|---|---|
-| **Primer report** | Forward and reverse primer sequences, Tm, GC%, length, linguistic complexity, and amplicon coordinates |
-| **Pool assignments** | Multiplex pool allocation (Pool A / Pool B) for each primer pair, ensuring no overlapping amplicons share a pool |
-| **Tailed primers** | Full primer sequences including 5′ adapter tails, ready for ordering |
-| **Coverage summary** | Target region coverage statistics and any gaps in amplicon tiling |
+| File | Written in | Contents |
+|---|---|---|
+| `<target>_primers.txt` | multiplex | Every primer that passed the filters, grouped by target region: the run's parameters as a header block, then one line per candidate |
+| `<target>_panels.txt` | both modes | The panels themselves: `Panel1:` / `Panel2:` sections in multiplex mode, a single `Panel:` section in single-plex, each amplicon written as its forward/reverse pair followed by an `ExonID … PCR amplicon … Tm … CG%` line |
+| `<target>_panelprimers.txt` | multiplex | The selected panel primers as a plain name-and-sequence list, ready to paste into an order form |
 
-### Interpreting the Primer Report
+With `multiplex=false` only `<target>_panels.txt` is produced, and each amplicon there is followed
+by its full sequence — the candidate list and the order list are multiplex-mode outputs.
 
-Each primer entry in the report includes:
+### Interpreting the primer report
+
+`<target>_primers.txt` opens with the parameters the run applied — amplicon size, Tm and length
+limits, end constraints, and the adapter tails when set — which is the authoritative record of what
+a run did. Region headers (`exon:1 1001-2053 1053bp`) separate the candidate lists, and each
+candidate line holds six fields:
 
 | Field | Description |
 |---|---|
-| **Primer ID** | Unique identifier (gene name + exon + direction) |
-| **Sequence** | Bare primer sequence (5′→3′) |
-| **Length** | Primer length in nucleotides |
-| **Tm** | Predicted melting temperature (°C), calculated using the nearest-neighbour method |
-| **GC%** | GC content as a percentage (0–100%) |
-| **LC%** | Linguistic complexity (0–100%) |
-| **Amplicon start–end** | Genomic coordinates of the resulting amplicon |
-| **Amplicon size** | Amplicon length in base pairs |
-| **Pool** | Multiplex pool assignment (A or B) |
+| **Name** | `<record ID>:<F\|R>_<start>-<end>` — the accession of the record, the direction, and the coordinates of the primer within it, e.g. `NG_009818.1:F_819-842` |
+| **Sequence** | The primer, 5′→3′, **including the adapter tail** when `forwardtail` / `reversetail` are set |
+| **Length** | Length of the primer itself, tail excluded |
+| **Tm(°C)** | Predicted melting temperature of the primer itself, nearest-neighbour model |
+| **GC(%)** | GC content of the primer itself |
+| **Linguistic_Complexity(%)** | Sequence complexity, 0–100% |
+
+Length, Tm, GC and complexity therefore describe the bare primer, while the sequence column shows
+what you would order — a 24 nt primer carrying a 33 nt adapter appears as a 57-character sequence.
+
+Amplicon size, its Tm and GC, and the pool an amplicon belongs to are properties of a *pair*, and so
+live in `<target>_panels.txt`, not in the primer report:
+
+```
+Panel1:
+Name	Sequence	Length	Tm(°C)	GC(%)	Linguistic_Complexity(%)
+NG_009818.1:F_819-842	acactctttccctacacgacgctcttccgatctgcaaactatgagctaggtattcct	24	61,0	41,7	95
+NG_009818.1:R_1069-1051	gtgactggagttcagacgtgtgctcttccgatctgttagacacctgccaccta	19	60,1	52,6	81
+ExonID:1 PCR amplicon=251 bp Tm=77,6 CG%=37,6
+```
+
+> **Decimal separator.** Numbers are formatted with the JVM's default locale, so a machine set to a
+> European locale writes `61,0` where an English one writes `61.0`. Import the reports accordingly,
+> or run with `-Duser.language=en -Duser.country=US` before `-jar` to force a decimal point.
 
 ---
 
@@ -802,20 +781,22 @@ maxPCR=500
 
 ### 6. Promoter / Regulatory-Region Panels
 
-Amplify the regulatory landscape upstream of a gene — core promoters, CpG islands, and 5′ variants — by adding a promoter window to your targets. Promoter and exon amplicons are designed together in one panel:
+Regions outside the annotated exons — core promoters, CpG islands, 5′ variants — are covered by
+giving PCRpanel a record that *contains* them and no exon annotation, so the whole sequence becomes
+the target. Extract the upstream window into a FASTA record first, then tile it like any other
+target:
 
 ```ini
-target_path=/data/genes/COL4A5.gb
+# COL4A5_upstream.fa holds the 1 kb immediately 5' of the transcription start site
+target_path=/data/genes/COL4A5_upstream.fa
 
 multiplex=true
 minPCR=250
 maxPCR=500
-
-# 1 kb promoter upstream of each transcript's TSS
-promoter=1000
 ```
 
-See [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting) for strand handling and clamping details.
+A GenBank record carrying `exon` features is targeted at those exons only, so an upstream region
+inside such a record is not designed against; supply it as a separate FASTA record as above.
 
 ---
 
@@ -927,7 +908,7 @@ If `folder_out` points to an existing directory, PCRpanel **deletes its contents
 Yes. PCRpanel is organism-agnostic. Any GenBank or FASTA sequence can be used as input — viral, bacterial, plant, or animal.
 
 **Q: Can PCRpanel design primers for promoter / upstream regions?**
-Yes. Set `promoter=<bp>` (e.g., `promoter=1000`) to add a target window upstream of each transcript's TSS. The window is strand-aware and clamped to the sequence bounds; transcript annotation (`mRNA` / `ncRNA`) is required so the TSS can be located. Promoter and exon amplicons are designed together in the same run. See [Promoter & Upstream-Region Targeting](#promoter--upstream-region-targeting).
+Yes, but not from a configuration switch: targets come from the `exon` features of a GenBank record, or from the whole sequence when there are none. Cut the upstream window you want into its own FASTA record and pass it as a `target_path` — it is then tiled like any other target, in the same run as your exon panel. See [Use Case 6](#6-promoter--regulatory-region-panels).
 
 **Q: What is linguistic complexity, and why filter on it?**
 Linguistic complexity measures sequence diversity on a 0–100% scale. Low-complexity regions (e.g., `AAAAAAA` or `ATATATATAT`) make poor primer binding sites because they can hybridise to many genomic locations. The default threshold of 80% filters out these regions. This criterion indirectly indicates the effectiveness of the PCR primer and its uniqueness.

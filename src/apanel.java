@@ -524,8 +524,11 @@ public class apanel {
 
         h.append("CONFIGURATION FILE FORMAT").append(nl);
         h.append("  Write one command per line as:  key=value").append(nl);
-        h.append("  Commands may appear in any order. Blank lines, lines starting with '#',").append(nl);
-        h.append("  and any unrecognised text are ignored, so notes can be kept in the file.").append(nl);
+        h.append("  Commands may appear in any order. Text that holds no known key=value is").append(nl);
+        h.append("  ignored, so notes can be kept in the file - but a command is recognised").append(nl);
+        h.append("  ANYWHERE in a line, so '#' does NOT switch one off: '# minPCR=250' is read").append(nl);
+        h.append("  as 'minPCR=250'. Delete a setting instead of commenting it out. The values").append(nl);
+        h.append("  a run applied are echoed below and repeated in the primer report header.").append(nl);
         h.append("  Path commands (target_path, reference_path) may be repeated.").append(nl);
         h.append("  Keys are case-insensitive; out-of-range numbers are clamped to the limit.").append(nl);
         h.append(nl);
