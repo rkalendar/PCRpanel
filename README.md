@@ -1016,7 +1016,7 @@ PCRpanel generates primer candidates optimised for multiplex compatibility and s
 
 If you use PCRpanel in your research, please cite:
 
-> Kalendar, R. (2025). PCRpanel: Custom Amplicon Panel Designer. Available at <https://primerdigital.com/tools/panel.html>
+Kalendar R, Daniyarov A, Serikzhan A, Kairov U, Basharova D, Toleuzhanova A, Bekbayeva A, Romanova A, Zholdybayeva E 2026. PCRpanel: Automated Design of Ultra-Multiplex PCR Panels for Targeted Amplicon Sequencing. BMC Bioinformatics, 27. DOI:10.1186/s12859-026-065xx 
 
 <!-- TODO: Replace with the published paper reference once available. -->
 
