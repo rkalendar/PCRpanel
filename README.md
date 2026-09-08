@@ -4,6 +4,11 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Docs](https://img.shields.io/badge/Docs-Online-informational)](https://primerdigital.com/tools/panel.html)
+[![DOI](https://img.shields.io/badge/DOI-10.1186%2Fs12859--026--06648--0-blue)](https://doi.org/10.1186/s12859-026-06648-0)
+
+> 📄 **Publication:** The PCRpanel paper has been accepted for publication in *BMC Bioinformatics* (in press):
+>
+> Kalendar, R., Daniyarov, A., Serikzhan, A., Kairov, U., Basharova, D., Toleuzhanova, A., Bekbayeva, A., Romanova, A., & Zholdybayeva, E. 2026. PCRpanel: automated design of ultra-multiplex PCR panels for targeted amplicon sequencing. *BMC Bioinformatics*. <https://doi.org/10.1186/s12859-026-06648-0>
 
 **PCRpanel** designs custom amplicon panels for **next-generation sequencing (NGS)** and **Oxford Nanopore (ONT)** platforms. It supports **ultra-high multiplex tiling PCR** and standard singleplex workflows. Give it a GenBank or FASTA file, and it returns optimised primer sets ready for wet-lab validation.
 
@@ -1016,9 +1021,7 @@ PCRpanel generates primer candidates optimised for multiplex compatibility and s
 
 If you use PCRpanel in your research, please cite:
 
- Kalendar R, Daniyarov A, Serikzhan A, Kairov U, Basharova D, Toleuzhanova A, Bekbayeva A, Romanova A, Zholdybayeva E 2026. PCRpanel: automated design of ultra-multiplex PCR panels for targeted amplicon sequencing. BMC Bioinformatics, 27. DOI:10.1186/s12859-026-06648-0
-
-<!-- TODO: Replace with the published paper reference once available. -->
+> Kalendar, R., Daniyarov, A., Serikzhan, A., Kairov, U., Basharova, D., Toleuzhanova, A., Bekbayeva, A., Romanova, A., & Zholdybayeva, E. 2026. PCRpanel: automated design of ultra-multiplex PCR panels for targeted amplicon sequencing. *BMC Bioinformatics*. <https://doi.org/10.1186/s12859-026-06648-0>
 
 ---
 
