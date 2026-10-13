@@ -50,6 +50,7 @@
 | Feature | Description |
 |---|---|
 | **Multiplex tiling PCR** | Designs two overlapping pools of amplicons for complete, gap-free target coverage |
+| **No drop-outs** | Regions with the fewest primer options are placed first, and amplicons that conflict with both pools go to extra tubes instead of being dropped |
 | **Single-plex mode** | Non-multiplexed primer design for simpler workflows |
 | **Any-scale input** | Works with sequences of any length and any number of targets |
 | **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
@@ -71,7 +72,7 @@
 │                                                                          │
 │   1. INPUT                    2. TARGET DETECTION                        │
 │   ┌───────────────┐           ┌───────────────────────────┐              │
-│   │ GenBank (.gb) │─────────▶ │ Parse exon, intron, CDS,  │             │
+│   │ GenBank (.gb) │─────────▶ │ Parse exon, intron, CDS,  │              │
 │   │ FASTA   (.fa) │           │ or full-sequence targets  │              │
 │   │ Primer list   │           └─────────────┬─────────────┘              │
 │   └───────────────┘                         │                            │
@@ -85,7 +86,9 @@
 │   │  • De novo detection and masking of repetitive sequences │           │
 │   │  • Screen against repeated sequences (optional)          │           │
 │   │  • Check specificity vs. reference genome (optional)     │           │
+│   │  • Place regions with the fewest primer pairs first      │           │
 │   │  • Arrange amplicons into multiplex-compatible pools     │           │
+│   │  • Extra tubes for amplicons conflicting with both pools │           │
 │   └───────────────────────────┬──────────────────────────────┘           │
 │                               │                                          │
 │   4. OUTPUT                   ▼                                          │
@@ -99,7 +102,7 @@
 
 1. **Parse** — Reads GenBank or FASTA input and any existing primer list; identifies target coordinates from feature annotations.
 2. **Detect** — Extracts target regions (exons by default) using a priority-based recognition hierarchy.
-3. **Design** — Generates candidate primers, applies thermodynamic and specificity filters, and arranges amplicons into multiplex-compatible pools.
+3. **Design** — Generates candidate primers, applies thermodynamic and specificity filters, and arranges amplicons into multiplex-compatible pools, placing the regions with the fewest primer options first. Amplicons that cannot join either pool without a conflict go to extra tubes rather than being dropped.
 4. **Report** — Outputs primer sequences, amplicon coordinates, pool assignments, adapter-tailed sequences, and coverage statistics.
 
 ---
@@ -108,7 +111,7 @@
 
 | Requirement | Details |
 |---|---|
-| **Java** | Version **25** or higher ([download](https://www.oracle.com/java/technologies/downloads/)) |
+| **Java** | Version **26** or higher ([download](https://www.oracle.com/java/technologies/downloads/)) |
 | **OS** | Windows, macOS, or Linux — platform-independent |
 | **RAM** | Default heap is sufficient for most genes; large genomes may need 16–128 GB (see [Memory Configuration](#memory-configuration)) |
 
@@ -309,7 +312,7 @@ Other standard IUPAC codes (`r`, `y`, `m`, `k`, `b`, `d`, `h`, `v`) are also acc
 
 | Parameter | Description | Default |
 |---|---|---|
-| `multiplex` | Generate two overlapping, multiplex-compatible amplicon pools | `true` |
+| `multiplex` | Generate two overlapping, multiplex-compatible amplicon pools (Panel1, Panel2). Amplicons that conflict with both go to extra tubes (Panel3, Panel4, …), opened only when needed — see [Stage 4](#stage-4--amplicon-assembly--pooling) | `true` |
 | `homology` | Design consensus primers from shared sequences across input files | `false` |
 
 ### Target Region
@@ -678,7 +681,9 @@ PCRpanel uses a multi-stage filtering pipeline to select optimal primers for eac
 
 ### Stage 1 — Candidate Generation
 
-For every target region, PCRpanel generates all possible forward and reverse primers within the allowed length range (`minLen`–`maxLen`). Candidates are drawn from the flanking sequence upstream and downstream of each target.
+For every target region, PCRpanel generates all possible forward and reverse primers within the allowed length range (`minLen`–`maxLen`). Candidates are drawn from the flanking sequence upstream and downstream of each target, up to `minPCR` bp (at most 500 bp) beyond its ends. Targets less than `minPCR` apart, or that fit together within `maxPCR`, are merged into one design region.
+
+When the primers found in these flanks cannot cover a region — no primer pair at all, or a region edge out of reach — the search is repeated with the flanks widened as far as `maxPCR` allows. The primer report marks such regions `search flanks widened to N bp`.
 
 ### Stage 2 — Thermodynamic Filtering
 
@@ -697,7 +702,16 @@ Each candidate is evaluated against thermodynamic criteria:
 
 ### Stage 4 — Amplicon Assembly & Pooling
 
-Passing primers are paired into amplicons that tile across the target region. When `multiplex=true`, amplicons are split into **two pools** (A and B) such that no two overlapping amplicons share a pool, enabling two-reaction multiplex PCR with complete coverage.
+Passing primers are paired into amplicons that tile across the target region. Each forward primer is paired with the nearest reverse primer that gives an amplicon of `minPCR`–`maxPCR` bp overlapping the target (spanning it, for targets shorter than `minPCR`); every other valid forward/reverse combination is kept as an alternative for closing gaps.
+
+The amplicons are then assembled so that **no target region is dropped while a primer pair for it exists**:
+
+1. **Hardest regions first.** Regions are placed in order of increasing number of candidate primer pairs: the regions with the fewest alternatives seed the pools, and the regions with many alternatives are fitted around them. In multiplex mode, several input files are assembled together into one panel, and this order runs across all of them.
+2. **Two tiled pools.** When `multiplex=true`, each region is tiled into **Panel1** (non-overlapping amplicons) and **Panel2** (amplicons bridging them), so that no two overlapping amplicons share a pool. An amplicon joins a pool only if none of its primers forms a primer-dimer with any primer already in that tube — across all regions and all input files — and it overlaps no amplicon of the same sequence there.
+3. **Coverage guarantee.** Every target region still not covered in full is filled from the unused pairs and alternatives: first where an amplicon fits a pool as it is, then by moving the amplicon in its way to the other pool.
+4. **Extra tubes.** An amplicon that conflicts with both Panel1 and Panel2 goes to an extra tube — **Panel3**, then **Panel4**, and so on: into the first one where it fits, or into a new tube. No tube of a multiplex panel carries a known conflict. Extra tubes are opened only when needed; how many depends on the size of the panel and the length of the adapter tails.
+
+Each tube is a separate multiplex reaction. In single-plex mode (`multiplex=false`) every amplicon is amplified on its own, so amplicons may overlap and tile the whole target; an amplicon whose primers dimerise with another amplicon's primers is still included, and flagged `FORCED` in the report.
 
 ### Stage 5 — Tail Attachment
 
@@ -711,10 +725,10 @@ PCRpanel generates the following output for each target:
 
 | File | Contents |
 |---|---|
-| **Primer report** | Forward and reverse primer sequences, Tm, GC%, length, linguistic complexity, and amplicon coordinates |
-| **Pool assignments** | Multiplex pool allocation (Pool A / Pool B) for each primer pair, ensuring no overlapping amplicons share a pool |
-| **Tailed primers** | Full primer sequences including 5′ adapter tails, ready for ordering |
-| **Coverage summary** | Target region coverage statistics and any gaps in amplicon tiling |
+| **Primer report** (`*_primers.txt`) | Forward and reverse primer sequences, Tm, GC%, length, linguistic complexity, and amplicon coordinates |
+| **Pool assignments** (`*_panels.txt`) | The panel tube by tube — Panel1, Panel2, and any extra tubes (Panel3, Panel4, …) — with the primer pairs and amplicons of each, ensuring no overlapping amplicons share a tube |
+| **Tailed primers** (`*_panelprimers.txt`) | Full primer sequences including 5′ adapter tails, ready for ordering |
+| **Coverage summary** (end of `*_panels.txt`) | Target region coverage statistics and any gaps in amplicon tiling, preceded by the [panel assembly notes](#interpreting-the-panel-assembly-notes) |
 
 ### Interpreting the Primer Report
 
@@ -722,7 +736,7 @@ Each primer entry in the report includes:
 
 | Field | Description |
 |---|---|
-| **Primer ID** | Unique identifier (gene name + exon + direction) |
+| **Primer ID** | `<record>:F_<5′>-<3′>` or `<record>:R_<5′>-<3′>`, e.g. `NG_011977.2:F_3864-3886`, `NG_011977.2:R_4226-4205`. `<record>` is the GenBank `VERSION` (or `ACCESSION`), or the first word of the FASTA header; `F`/`R` is the direction; the numbers are the 1-based positions of the primer's binding site on the target sequence, from its 5′ to its 3′ end (descending for reverse primers; the adapter tail is not included) |
 | **Sequence** | Bare primer sequence (5′→3′) |
 | **Length** | Primer length in nucleotides |
 | **Tm** | Predicted melting temperature (°C), calculated using the nearest-neighbour method |
@@ -730,31 +744,57 @@ Each primer entry in the report includes:
 | **LC%** | Linguistic complexity (0–100%) |
 | **Amplicon start–end** | Genomic coordinates of the resulting amplicon |
 | **Amplicon size** | Amplicon length in base pairs |
-| **Pool** | Multiplex pool assignment (A or B) |
+| **Pool** | Tube the pair is listed under in `*_panels.txt`: Panel1 or Panel2, or an extra tube (Panel3, Panel4, …) |
+
+The primer report also marks two kinds of regions in their headers:
+
+| Mark | Meaning |
+|---|---|
+| `join with N` | The region was merged into region N, whose primers cover it; no primers are listed under it |
+| `search flanks widened to N bp` | The default flanks could not cover the region, so its primers were searched up to N bp from it |
+
+### Interpreting the Panel Assembly Notes
+
+When assembling the panel took more than tiling the two pools, `*_panels.txt` contains a **Panel assembly** section just before the coverage report, also echoed to the console:
+
+```
+Panel assembly
+Amplicons that conflict with both Panel1 and Panel2 are amplified in extra tubes, each free of conflicts, so that their regions are not dropped: Panel3 (7)
+The panel as a whole needs 3 tubes.
+Regions without any candidate primer pair at the current settings: 10, 16, 42, 46
+```
+
+| Line | Meaning |
+|---|---|
+| **Extra tubes** | How many of this target's amplicons are in each extra tube. Each tube is a separate multiplex reaction — amplify every tube listed |
+| **The panel as a whole needs N tubes** | Total number of tubes, counting those opened for the other input files of the run, which share the tubes |
+| **Regions without any candidate primer pair** | Regions, numbered as in the coverage report, for which no primer pair exists at the current settings even with widened search flanks. Relax the settings as described in [Closing Coverage Gaps](#closing-coverage-gaps) |
+| **Amplicons placed despite a conflict** *(single-plex only)* | Amplicons included although their primers dimerise with another amplicon's primers. They are also marked `FORCED (…)` in the panel listing, with the conflicting primers named |
 
 ### Interpreting the Coverage Report
 
 Every panel report ends with a target-coverage summary, written to `*_panels.txt` and echoed to the
-console. Amplicon count is not a measure of coverage — amplicons overlap, and regions that no primer pair
-can satisfy are skipped silently — so the report measures coverage base by base against the annotated
+console. Amplicon count is not a measure of coverage — amplicons overlap, and a region that no primer pair
+can reach is left uncovered — so the report measures coverage base by base against the annotated
 target:
 
 ```
 Target coverage report
-Annotated target: 53 region(s), 6531 bp
+Annotated target: 59 region(s), 9921 bp
 
 Pool    Amplicons  Target bp covered  Coverage  Regions full  Partial  Uncovered
-Panel1  50         2625               40.2%     5             27       21
-Panel2  28         1666               25.5%     3             19       31
-All pools combined 78  3367           51.6%     9             26       18
+Panel1  42         5914               59.6%     26            16       17
+Panel2  33         5416               54.6%     17            18       24
+Panel3  7          1695               17.1%     5             3        51
+All pools combined 82  9604           96.8%     54            1        4
 
-Regions not covered in full: 44 of 53, leaving 3164 bp of the target without an amplicon.
-Region (coverage): 1 (98.1%), 2 (0.0%), 3 (47.8%), 4 (0.0%), 6 (73.0%), ...
+Regions not covered in full: 5 of 59, leaving 317 bp of the target without an amplicon.
+Region (coverage): 10 (0.0%), 16 (0.0%), 17 (50.0%), 42 (0.0%), 46 (0.0%)
 ```
 
 | Column | Meaning |
 |---|---|
-| **Pool** | Each multiplex pool separately, then all pools together |
+| **Pool** | Each tube separately — Panel1, Panel2, and any extra tubes — then all tubes together |
 | **Amplicons** | Primer pairs carried by that pool |
 | **Target bp covered** | Bases of the annotated target overlapped by that pool's amplicons, counted once |
 | **Coverage** | The same figure as a percentage of the whole target |
@@ -766,8 +806,12 @@ be located without reconstructing them from amplicon coordinates.
 ### Closing Coverage Gaps
 
 A region is left uncovered when no primer pair satisfying the current constraints can be placed around it —
-most often because the flanking sequence is repetitive or of low complexity and has been masked. To force a
-design over such regions, relax the constraints and re-run:
+most often because the flanking sequence is repetitive or of low complexity and has been masked. Primer
+conflicts alone never leave a region uncovered: before giving up on a region, PCRpanel widens its primer
+search flanks as far as `maxPCR` allows, and places any amplicon that conflicts with the rest of the panel
+in an extra tube. Regions for which no primer pair exists at all are listed in the
+[Panel assembly](#interpreting-the-panel-assembly-notes) section. To force a design over such regions,
+relax the constraints and re-run:
 
 | Setting | Effect | Try |
 |---|---|---|
@@ -800,6 +844,8 @@ multiplex=true
 minPCR=250
 maxPCR=500
 ```
+
+All genes of a run share the same tubes: PCRpanel designs primers for each gene, then assembles all genes into one panel, placing the hardest regions of any gene first and checking primer-dimers across genes. The report of each gene lists its own amplicons in each tube.
 
 ### 2. Whole-Genome Tiling (Viral Sequencing)
 
@@ -909,6 +955,8 @@ genome_mask=*.fna
 multiplex=true
 ```
 
+Large panels, and panels with long adapter tails, are more likely to need extra tubes (Panel3, Panel4, …): every primer in a tube is checked against every other, and the more primers a tube holds, the more likely a new one dimerises with one of them. The [Panel assembly](#interpreting-the-panel-assembly-notes) section reports how many tubes the panel needs; the extra tubes are usually much smaller than Panel1 and Panel2.
+
 ---
 
 ## Related Tools
@@ -950,7 +998,7 @@ See [File Masks](#file-masks) for the full mask syntax.
 java -version
 
 # If multiple versions are installed, set JAVA_HOME explicitly
-export JAVA_HOME=/path/to/jdk-25
+export JAVA_HOME=/path/to/jdk-26
 export PATH="$JAVA_HOME/bin:$PATH"
 ```
 
@@ -966,10 +1014,16 @@ See [Memory Configuration](#memory-configuration) for genome-size-specific recom
 
 ### Primers not found for some targets
 
+The [Panel assembly](#interpreting-the-panel-assembly-notes) section lists the regions for which no primer pair exists at the current settings. To recover them:
+
 - **Widen Tm range:** Try `minTm=58` and `maxTm=64`.
 - **Increase primer length range:** Try `minLen=17` and `maxLen=28`.
 - **Increase amplicon size range:** Allow larger amplicons with a higher `maxPCR`.
 - **Lower complexity threshold:** Reduce `minLC` (e.g., to `70`) for AT-rich or repetitive regions.
+
+### The panel needs more than two tubes
+
+Amplicons that would form a primer-dimer with, or overlap, amplicons in both Panel1 and Panel2 are placed in extra tubes (Panel3, Panel4, …) instead of being dropped, and no tube carries a known conflict. Amplify every tube as a separate multiplex reaction. Extra tubes are more common in large panels and with long adapter tails; see [Handling Large Gene Panels](#handling-large-gene-panels).
 
 ### Output directory was overwritten
 
@@ -992,7 +1046,10 @@ Linguistic complexity measures sequence diversity on a 0–100% scale. Low-compl
 Yes. Set `forwardtail` and `reversetail` to any nucleotide sequence. Leave them blank for no tails. See [Adapter & Tail Sequences](#adapter--tail-sequences) for platform-specific examples.
 
 **Q: How does multiplex pooling work?**
-When `multiplex=true` (default), PCRpanel splits primer pairs into **two pools** (A and B) such that amplicons within each pool do not overlap. This enables two-reaction multiplex PCR with complete target coverage.
+When `multiplex=true` (default), PCRpanel splits primer pairs into **two pools** (Panel1 and Panel2) such that amplicons within each pool do not overlap and no primers in a pool form primer-dimers. This enables two-reaction multiplex PCR with complete target coverage. Amplicons that conflict with both pools go to extra tubes (Panel3, Panel4, …), opened only when needed. See [Stage 4](#stage-4--amplicon-assembly--pooling).
+
+**Q: Can a region drop out of the panel because its primers conflict with other primers?**
+No. Regions with the fewest primer options are placed first, so the others are fitted around them, and an amplicon that conflicts with both pools is placed in an extra tube. Only a region for which no primer pair exists at the current settings remains uncovered; such regions are listed in the [Panel assembly](#interpreting-the-panel-assembly-notes) section of the report.
 
 **Q: Can I run PCRpanel without a reference genome?**
 Yes. The `genome_path` parameter is optional. Without it, PCRpanel skips the genome-wide specificity check — useful for rapid panel prototyping or when working with organisms that lack a reference assembly. Repeating sequences will be identified de novo in target sequences automatically, without using a reference library. 
