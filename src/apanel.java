@@ -343,6 +343,26 @@ public class apanel {
                 if ((v = parseIntParam(line, "maxtm=")) != null) {
                     cfg.maxTm = clamp(v, 40, 80);
                 }
+                if ((v = parseIntParam(line, "minlc=")) != null) {
+                    cfg.minLc = clamp(v, 0, 100);
+                    System.out.println("minLC=" + cfg.minLc);
+                }
+                if ((v = parseIntParam(line, "prlap=")) != null) {
+                    cfg.prLap = clamp(v, 0, 18);
+                    System.out.println("prLap=" + cfg.prLap);
+                }
+                if ((v = parseIntParam(line, "maskedbases=")) != null) {
+                    PrimerDesign.MASK_TOLERANCE = clamp(v, 0, 40);
+                    System.out.println("maskedBases=" + PrimerDesign.MASK_TOLERANCE);
+                }
+                if ((v = parseIntParam(line, "repeatkmer=")) != null) {
+                    PrimerDesign.GENOME_KMER_SIZE = clamp(v, 8, 64);
+                    System.out.println("repeatKmer=" + PrimerDesign.GENOME_KMER_SIZE);
+                }
+                if ((v = parseIntParam(line, "repeatmincount=")) != null) {
+                    MaskingSequence.MIN_COUNT = clamp(v, 2, 1000);
+                    System.out.println("repeatMinCount=" + MaskingSequence.MIN_COUNT);
+                }
             }
         } catch (IOException e) {
             System.err.println("Error reading config file '" + infile + "': " + e.getMessage());
@@ -425,6 +445,7 @@ public class apanel {
         List<String> sequences = new ArrayList<>();
         List<String> nameSequences = new ArrayList<>();
         List<int[]> exonsSequences = new ArrayList<>();
+        List<String> fileSequences = new ArrayList<>();
 
         // Phase 1: load all sequences
         for (String tagfile : tagfiles) {
@@ -435,9 +456,11 @@ public class apanel {
             sequences.add(rec.sequence);
             nameSequences.add(rec.name);
             exonsSequences.add(rec.exons);
+            fileSequences.add(tagfile);
         }
 
         // Phase 2: design primers file-by-file
+        List<MultiplexTarget> designs = new ArrayList<>();
         int nseq = sequences.size();
         for (int i = 0; i < nseq; i++) {
             String sequence = sequences.get(i);
@@ -447,16 +470,42 @@ public class apanel {
 
             String name = nameSequences.get(i);
             int[] exons = exonsSequences.get(i);
-            String tagfile = tagfiles.get(i);
+            String tagfile = fileSequences.get(i);
             String otherSeqs = buildOtherSequences(sequences, i);
 
-            String[] newPrimers = RunMultiplexPanelDesign(map, tagfile, cfg.outPath,
+            designs.add(designMultiplexTarget(map, tagfile,
                     sequence, name, refsequence, otherSeqs,
                     cfg.homology, primers, exons,
                     cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                     cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3);
-            primers = combineArrays(primers, newPrimers);
+                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3));
+        }
+
+        // Phase 3: one panel for all files, which share the two tubes. Assembling
+        // them together lets the regions with the fewest primer pairs, in any file,
+        // be placed first; designing each file against the primers of the files
+        // before it left the last files without primers for some of their regions.
+        List<Pair> pcrcol = new ArrayList<>();
+        List<Pair> alternatives = new ArrayList<>();
+        List<int[]> targets = new ArrayList<>();
+        for (int s = 0; s < designs.size(); s++) {
+            MultiplexTarget t = designs.get(s);
+            for (Pair p : t.pcrcol) {
+                p.seq = s;
+            }
+            for (Pair p : t.allPairs) {
+                p.seq = s;
+            }
+            pcrcol.addAll(t.pcrcol);
+            alternatives.addAll(t.allPairs);
+            targets.add(t.cexons);
+        }
+        PanelsCollector panels = new PanelsCollector(pcrcol, alternatives);
+        panels.CombinePairsPanel(targets, 2);
+
+        // Phase 4: reports, file by file
+        for (int s = 0; s < designs.size(); s++) {
+            reportMultiplexTarget(designs.get(s), s, panels, cfg.outPath);
         }
     }
 
@@ -524,11 +573,8 @@ public class apanel {
 
         h.append("CONFIGURATION FILE FORMAT").append(nl);
         h.append("  Write one command per line as:  key=value").append(nl);
-        h.append("  Commands may appear in any order. Text that holds no known key=value is").append(nl);
-        h.append("  ignored, so notes can be kept in the file - but a command is recognised").append(nl);
-        h.append("  ANYWHERE in a line, so '#' does NOT switch one off: '# minPCR=250' is read").append(nl);
-        h.append("  as 'minPCR=250'. Delete a setting instead of commenting it out. The values").append(nl);
-        h.append("  a run applied are echoed below and repeated in the primer report header.").append(nl);
+        h.append("  Commands may appear in any order. Blank lines, lines starting with '#',").append(nl);
+        h.append("  and any unrecognised text are ignored, so notes can be kept in the file.").append(nl);
         h.append("  Path commands (target_path, reference_path) may be repeated.").append(nl);
         h.append("  Keys are case-insensitive; out-of-range numbers are clamped to the limit.").append(nl);
         h.append(nl);
@@ -552,6 +598,9 @@ public class apanel {
 
         h.append("PANEL MODE").append(nl);
         h.append(helpRow("multiplex=true|false", "Two overlapping multiplex pools. Default true."));
+        h.append(helpRow("",                     "Amplicons that conflict with both pools go to extra"));
+        h.append(helpRow("",                     "tubes (Panel3, Panel4, ...), each free of conflicts,"));
+        h.append(helpRow("",                     "instead of being dropped."));
         h.append(helpRow("homology=true|false",  "Consensus primers from regions shared across inputs."));
         h.append(helpRow("",                     "Default false."));
         h.append(nl);
@@ -678,7 +727,90 @@ public class apanel {
         return exons;
     }
 
-    private static String[] RunMultiplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
+    /**
+     * One target file of a multiplex run, between its primer design and its
+     * report. It keeps the design results rather than the PrimerDesign, which
+     * holds the other files' sequences.
+     */
+    private static class MultiplexTarget {
+
+        String tagfile;
+        String seq;
+        int[] exons;      // regions as merged by the design
+        int[] cexons;     // regions before merging
+        PrimersCollector[] fPrimersList;
+        PrimersCollector[] rPrimersList;
+        int[] widened;
+        List<Pair> pcrcol;
+        List<Pair> allPairs;
+        StringBuilder sr; // primer list report, its header written at design time
+    }
+
+    private static MultiplexTarget designMultiplexTarget(LongIntHashMap map, String tagfile, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) {
+        MultiplexTarget t = new MultiplexTarget();
+        t.tagfile = tagfile;
+        t.seq = seq;
+        t.exons = exons;
+        t.cexons = exons.clone();
+
+        /*   ExonsDesigner pex = new ExonsDesigner(minpcr, maxpcr);
+        List<ExonsDesigner.PcrFragment> fr = pex.buildPcrFragments(cexons);
+        fr.forEach(System.out::println);
+         */
+        StringBuilder sr = new StringBuilder(100000);
+        t.sr = sr;
+
+        long startTime = System.nanoTime();
+        System.out.println("Running...");
+        System.out.println("\nTarget file name: " + tagfile);
+
+        sr.append("Target file name: ").append(tagfile).append("\n");
+        if (homology) {
+            sr.append("Designing common primers only based on shared sequences between different files.\n");
+        }
+        sr.append("min PCR size=").append(minpcr).append("\n");
+        sr.append("max PCR size=").append(maxpcr).append("\n");
+        sr.append("min Tm=").append(mintm).append("\n");
+        sr.append("max Tm=").append(maxtm).append("\n");
+        sr.append("min length=").append(minlen).append("\n");
+        sr.append("max length=").append(maxlen).append("\n");
+
+        if (e3.length() > 0) {
+            sr.append("3-end=").append(e3).append("\n");
+        }
+        if (e5.length() > 0) {
+            sr.append("5-end=").append(e5).append("\n");
+        }
+        if (ftail.length() > 0) {
+            sr.append("Forward tail=").append(ftail).append("\n");
+        }
+        if (rtail.length() > 0) {
+            sr.append("Reverse tail=").append(rtail).append("\n");
+        }
+
+        PrimerDesign pd = new PrimerDesign(map, seq, name, minlen, maxlen, mintm, maxtm, minlc, exons, listprimers, refsequence, fastaseq, homology);
+        t.pcrcol = pd.runDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
+        t.allPairs = pd.getAllPairs();
+        t.fPrimersList = pd.getForwardPrimers();
+        t.rPrimersList = pd.getReversePrimers();
+        t.widened = pd.getWidenedFlanks();
+
+        long duration = (System.nanoTime() - startTime) / 1000000000;
+        System.out.println("Time taken: " + duration + " seconds\n\n");
+        return t;
+    }
+
+    /**
+     * Writes the reports of target {@code s}, whose amplicons the shared
+     * {@code panels} carry.
+     */
+    private static void reportMultiplexTarget(MultiplexTarget t, int s, PanelsCollector panels, String outpath) {
+        String tagfile = t.tagfile;
+        String seq = t.seq;
+        int[] exons = t.exons;
+        int[] cexons = t.cexons;
+        List<Pair> pcrcol = t.pcrcol;
+
         Path in = Paths.get(tagfile);
         // String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
         String stem = fileStem(in);
@@ -692,94 +824,42 @@ public class apanel {
         Path pcrcolfile = outDir.resolve(stem + "_panels.txt");
         Path panelprimerlistfile = outDir.resolve(stem + "_panelprimers.txt");
 
-        String[] listprimers2 = null;
-        int[] cexons = exons.clone();
-
-        /*   ExonsDesigner pex = new ExonsDesigner(minpcr, maxpcr);
-        List<ExonsDesigner.PcrFragment> fr = pex.buildPcrFragments(cexons);
-        fr.forEach(System.out::println);
-         */
         try {
-            StringBuilder sr = new StringBuilder(100000);
+            StringBuilder sr = t.sr;
             StringBuilder sr1 = new StringBuilder(100000);
             StringBuilder srpanel = new StringBuilder(100000);
 
-            long startTime = System.nanoTime();
-            System.out.println("Running...");
             System.out.println("\nTarget file name: " + tagfile);
 
-            sr.append("Target file name: ").append(tagfile).append("\n");
-            if (homology) {
-                sr.append("Designing common primers only based on shared sequences between different files.\n");
+            // Panel1 and Panel2 are the two multiplex tubes; Panel3 onwards, opened only
+            // when needed, carry the amplicons that conflict with both
+            List<List<Pair>> pcrpanels = new ArrayList<>();
+            for (int k = 1; k <= panels.getPanelCount(); k++) {
+                pcrpanels.add(poolOf(panels.getPanel(k), s));
             }
-            sr.append("min PCR size=").append(minpcr).append("\n");
-            sr.append("max PCR size=").append(maxpcr).append("\n");
-            sr.append("min Tm=").append(mintm).append("\n");
-            sr.append("max Tm=").append(maxtm).append("\n");
-            sr.append("min length=").append(minlen).append("\n");
-            sr.append("max length=").append(maxlen).append("\n");
-
-            if (e3.length() > 0) {
-                sr.append("3-end=").append(e3).append("\n");
+            for (int k = 0; k < pcrpanels.size(); k++) {
+                appendPanel(sr1, srpanel, "Panel" + (k + 1), pcrpanels.get(k), seq);
             }
-            if (e5.length() > 0) {
-                sr.append("5-end=").append(e5).append("\n");
+            String notes = panels.renderNotes(s);
+            if (!notes.isEmpty()) {
+                sr1.append(notes);
+                System.out.println(notes);
             }
-            if (ftail.length() > 0) {
-                sr.append("Forward tail=").append(ftail).append("\n");
-            }
-            if (rtail.length() > 0) {
-                sr.append("Reverse tail=").append(rtail).append("\n");
-            }
-
-            PrimerDesign pd = new PrimerDesign(map, seq, name, minlen, maxlen, mintm, maxtm, minlc, exons, listprimers, refsequence, fastaseq, homology);
-            List<Pair> pcrcol = pd.runDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
-
-            PanelsCollector panels = new PanelsCollector(pcrcol);
-            panels.CombinePairsPanel(exons.length);
-            List<Pair> pcrpanel1 = panels.getPanel1();
-            List<Pair> pcrpanel2 = panels.getPanel2();
-            ArrayList<String> stringList = new ArrayList<>();
-
-            if (!pcrpanel1.isEmpty()) {
-                sr1.append("Panel1:\n");
-                sr1.append("Name\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)\n");
-                for (Pair pcrx : pcrpanel1) {
-                    stringList.add(pcrx.fprimer);
-                    stringList.add(pcrx.rprimer);
-                    srpanel.append(pcrx.fprimername).append("\t").append(pcrx.fprimer).append("\n");
-                    srpanel.append(pcrx.rprimername).append("\t").append(pcrx.rprimer).append("\n");
-                    sr1.append(pcrx.fprimername).append("\t").append(pcrx.fprimer).append("\t").append(pcrx.fln).append("\t").append(String.format("%.1f", pcrx.fTm)).append("\t").append(String.format("%.1f", pcrx.fCG)).append("\t").append(pcrx.flc).append("\n");
-                    sr1.append(pcrx.rprimername).append("\t").append(pcrx.rprimer).append("\t").append(pcrx.rln).append("\t").append(String.format("%.1f", pcrx.rTm)).append("\t").append(String.format("%.1f", pcrx.rCG)).append("\t").append(pcrx.rlc).append("\n");
-
-                    String amp = seq.substring(pcrx.fx5, pcrx.rx5);
-                    DNA2 dna2 = new DNA2(amp);
-                    double Tm = dna2.getTm65();
-                    double CG = dna2.getCG();
-                    sr1.append("ExonID:").append((1 + pcrx.exonid)).append(" PCR amplicon=").append(pcrx.pcrsize).append(" bp Tm=").append(String.format("%.1f", Tm)).append(" CG%=").append(String.format("%.1f", CG)).append("\n\n");
+            CoverageReport cov = new CoverageReport(cexons);
+            for (int k = 0; k < pcrpanels.size(); k++) {
+                if (!pcrpanels.get(k).isEmpty()) {
+                    List<int[]> iv = new ArrayList<>();
+                    for (Pair pcrx : pcrpanels.get(k)) {
+                        iv.add(CoverageReport.interval(pcrx.fx5, 1 + pcrx.rx5));
+                    }
+                    cov.addPool("Panel" + (k + 1), iv);
                 }
             }
-            if (!pcrpanel2.isEmpty()) {
-                sr1.append("Panel2:\n");
-                sr1.append("Name\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)\n");
-                for (Pair pcrx : pcrpanel2) {
-                    stringList.add(pcrx.fprimer);
-                    stringList.add(pcrx.rprimer);
-                    srpanel.append(pcrx.fprimername).append("\t").append(pcrx.fprimer).append("\n");
-                    srpanel.append(pcrx.rprimername).append("\t").append(pcrx.rprimer).append("\n");
-                    sr1.append(pcrx.fprimername).append("\t").append(pcrx.fprimer).append("\t").append(pcrx.fln).append("\t").append(String.format("%.1f", pcrx.fTm)).append("\t").append(String.format("%.1f", pcrx.fCG)).append("\t").append(pcrx.flc).append("\n");
-                    sr1.append(pcrx.rprimername).append("\t").append(pcrx.rprimer).append("\t").append(pcrx.rln).append("\t").append(String.format("%.1f", pcrx.rTm)).append("\t").append(String.format("%.1f", pcrx.rCG)).append("\t").append(pcrx.rlc).append("\n");
-                    //   sr1.append("ExonID:").append((1 + pcrx.exonid)).append(" PCR amplicon=").append(pcrx.pcrsize).append(" bp\n\n");
-
-                    String amp = seq.substring(pcrx.fx5, pcrx.rx5);
-                    DNA2 dna2 = new DNA2(amp);
-                    double Tm = dna2.getTm65();
-                    double CG = dna2.getCG();
-                    sr1.append("ExonID:").append((1 + pcrx.exonid)).append(" PCR amplicon=").append(pcrx.pcrsize).append(" bp Tm=").append(String.format("%.1f", Tm)).append(" CG%=").append(String.format("%.1f", CG)).append("\n\n");
-
-                }
+            String covtxt = cov.render();
+            if (!covtxt.isEmpty()) {
+                sr1.append(covtxt);
+                System.out.println(covtxt);
             }
-            listprimers2 = stringList.toArray(String[]::new);
             /*
             // pcrcol - here all pairs list with exons ID
             if (!pcrcol.isEmpty()) {
@@ -791,8 +871,9 @@ public class apanel {
                 }
             }
              */
-            PrimersCollector[] fPrimersList = pd.getForwardPrimers();
-            PrimersCollector[] rPrimersList = pd.getReversePrimers();
+            PrimersCollector[] fPrimersList = t.fPrimersList;
+            PrimersCollector[] rPrimersList = t.rPrimersList;
+            int[] widened = t.widened;
             int h = -1;
             sr.append("\nName\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)");
             for (int j = 0; j < exons.length - 1; j += 2) {
@@ -801,8 +882,8 @@ public class apanel {
                     sr.append("\n").append("exon:").append(h + 1).append(" ").append(cexons[j]).append("-").append(cexons[j + 1]).append(" (").append(cexons[j + 1] - cexons[j] + 1).append("bp) join with ").append(-exons[j]).append("\n");
                     System.out.println("\nexon:" + (h + 1) + " " + cexons[j] + "-" + cexons[j + 1] + " (" + (cexons[j + 1] - cexons[j] + 1) + "bp) join with " + (-exons[j]));
                 } else {
-                    sr.append("\n").append("exon:").append(h + 1).append(" ").append(exons[j]).append("-").append(exons[j + 1]).append(" ").append(exons[j + 1] - exons[j] + 1).append("bp\n");
-                    System.out.println("\nexon:" + (h + 1) + " " + exons[j] + "-" + exons[j + 1] + " (" + (exons[j + 1] - exons[j] + 1) + "bp)");
+                    sr.append("\n").append("exon:").append(h + 1).append(" ").append(exons[j]).append("-").append(exons[j + 1]).append(" ").append(exons[j + 1] - exons[j] + 1).append("bp").append(flankNote(widened, h)).append("\n");
+                    System.out.println("\nexon:" + (h + 1) + " " + exons[j] + "-" + exons[j + 1] + " (" + (exons[j + 1] - exons[j] + 1) + "bp)" + flankNote(widened, h));
                 }
 
                 PrimersCollector fPrimersList1 = fPrimersList[h];
@@ -846,7 +927,7 @@ public class apanel {
                 fileWriter.write(sr.toString());
             }
 
-            if (!pcrpanel1.isEmpty()) {
+            if (srpanel.length() > 0) {
                 try (FileWriter fileWriter = new FileWriter(panelprimerlistfile.toFile())) {
                     System.out.println("Saving panels PCR primers combinations report to a file: " + panelprimerlistfile);
                     fileWriter.write(srpanel.toString());
@@ -859,14 +940,53 @@ public class apanel {
                     fileWriter.write(sr1.toString());
                 }
             }
-            long duration = (System.nanoTime() - startTime) / 1000000000;
-            System.out.println("Time taken: " + duration + " seconds\n\n");
 
         } catch (IOException e) {
             System.out.println("Incorrect file name.\n");
         }
-        return listprimers2;
+    }
 
+    /** The amplicons of target sequence {@code s} in one pool of the shared panel. */
+    private static List<Pair> poolOf(List<Pair> pool, int s) {
+        List<Pair> list = new ArrayList<>();
+        for (Pair pcrx : pool) {
+            if (pcrx.seq == s) {
+                list.add(pcrx);
+            }
+        }
+        return list;
+    }
+
+    /** Writes one pool to the panel report (sr1) and its primers to the primer list (srpanel). */
+    private static void appendPanel(StringBuilder sr1, StringBuilder srpanel, String label, List<Pair> pcrpanel, String seq) {
+        if (pcrpanel.isEmpty()) {
+            return;
+        }
+        sr1.append(label).append(":\n");
+        sr1.append("Name\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)\n");
+        for (Pair pcrx : pcrpanel) {
+            srpanel.append(pcrx.fprimername).append("\t").append(pcrx.fprimer).append("\n");
+            srpanel.append(pcrx.rprimername).append("\t").append(pcrx.rprimer).append("\n");
+            sr1.append(pcrx.fprimername).append("\t").append(pcrx.fprimer).append("\t").append(pcrx.fln).append("\t").append(String.format("%.1f", pcrx.fTm)).append("\t").append(String.format("%.1f", pcrx.fCG)).append("\t").append(pcrx.flc).append("\n");
+            sr1.append(pcrx.rprimername).append("\t").append(pcrx.rprimer).append("\t").append(pcrx.rln).append("\t").append(String.format("%.1f", pcrx.rTm)).append("\t").append(String.format("%.1f", pcrx.rCG)).append("\t").append(pcrx.rlc).append("\n");
+
+            String amp = seq.substring(pcrx.fx5, pcrx.rx5);
+            DNA2 dna2 = new DNA2(amp);
+            double Tm = dna2.getTm65();
+            double CG = dna2.getCG();
+            sr1.append("ExonID:").append((1 + pcrx.exonid)).append(" PCR amplicon=").append(pcrx.pcrsize).append(" bp Tm=").append(String.format("%.1f", Tm)).append(" CG%=").append(String.format("%.1f", CG)).append(forcedMark(pcrx)).append("\n\n");
+        }
+    }
+
+    /** Marks an amplicon line whose pair was forced into the panel. */
+    private static String forcedMark(Pair pcrx) {
+        return (pcrx.note == null) ? "" : " FORCED (" + pcrx.note + ")";
+    }
+
+    /** Notes a region rescued with widened primer-search flanks. */
+    private static String flankNote(int[] widened, int h) {
+        return (widened != null && h < widened.length && widened[h] > 0)
+                ? " search flanks widened to " + widened[h] + " bp" : "";
     }
 
     private static int StrToInt(String str) {
@@ -991,8 +1111,8 @@ public class apanel {
 
             List<Pair> pcrcol = pd.runDesign(ftail, rtail, e5, e3, prlap, minpcr, maxpcr);
 
-            PanelsCollector panels = new PanelsCollector(pcrcol);
-            panels.CombinePairsPanel(exons.length);
+            PanelsCollector panels = new PanelsCollector(pcrcol, pd.getAllPairs());
+            panels.CombinePairsPanel(cexons, 1);
             List<Pair> pcrpanel = panels.getPanel1();
 
             if (!pcrpanel.isEmpty()) {
@@ -1008,14 +1128,35 @@ public class apanel {
                     DNA2 dna2 = new DNA2(amp);
                     double Tm = dna2.getTm65();
                     double CG = dna2.getCG();
-                    sr1.append("ExonID:").append((1 + pcrx.exonid)).append(" PCR amplicon=").append(pcrx.pcrsize).append(" bp Tm=").append(String.format("%.1f", Tm)).append(" CG%=").append(String.format("%.1f", CG)).append("\n");
+                    sr1.append("ExonID:").append((1 + pcrx.exonid)).append(" PCR amplicon=").append(pcrx.pcrsize).append(" bp Tm=").append(String.format("%.1f", Tm)).append(" CG%=").append(String.format("%.1f", CG)).append(forcedMark(pcrx)).append("\n");
                     // sr1.append(">\n").append(amp).append("\n\n");
                     sr1.append(amp).append("\n\n");
                 }
             }
 
+            String notes = panels.renderNotes(0);
+            if (!notes.isEmpty()) {
+                sr1.append(notes);
+                System.out.println(notes);
+            }
+
+            if (!pcrpanel.isEmpty()) {
+                CoverageReport cov = new CoverageReport(cexons);
+                List<int[]> iv = new ArrayList<>();
+                for (Pair pcrx : pcrpanel) {
+                    iv.add(CoverageReport.interval(pcrx.fx5, 1 + pcrx.rx5));
+                }
+                cov.addPool("Panel", iv);
+                String covtxt = cov.render();
+                if (!covtxt.isEmpty()) {
+                    sr1.append(covtxt);
+                    System.out.println(covtxt);
+                }
+            }
+
             PrimersCollector[] fPrimersList = pd.getForwardPrimers();
             PrimersCollector[] rPrimersList = pd.getReversePrimers();
+            int[] widened = pd.getWidenedFlanks();
             int h = -1;
             sr.append("\nName\tSequence\tLength\tTm(°C)\tGC(%)\tLinguistic_Complexity(%)");
             for (int j = 0; j < exons.length - 1; j += 2) {
@@ -1024,8 +1165,8 @@ public class apanel {
                     sr.append("\n").append("exon:").append(h + 1).append(" ").append(cexons[j]).append("-").append(cexons[j + 1]).append(" (").append(cexons[j + 1] - cexons[j] + 1).append("bp) join with ").append(-exons[j]).append("\n");
                     System.out.println("\nexon:" + (h + 1) + " " + cexons[j] + "-" + cexons[j + 1] + " (" + (cexons[j + 1] - cexons[j] + 1) + "bp) join with " + (-exons[j]));
                 } else {
-                    sr.append("\n").append("exon:").append(h + 1).append(" ").append(exons[j]).append("-").append(exons[j + 1]).append(" ").append(exons[j + 1] - exons[j] + 1).append("bp\n");
-                    System.out.println("\nexon:" + (h + 1) + " " + exons[j] + "-" + exons[j + 1] + " (" + (exons[j + 1] - exons[j] + 1) + "bp)");
+                    sr.append("\n").append("exon:").append(h + 1).append(" ").append(exons[j]).append("-").append(exons[j + 1]).append(" ").append(exons[j + 1] - exons[j] + 1).append("bp").append(flankNote(widened, h)).append("\n");
+                    System.out.println("\nexon:" + (h + 1) + " " + exons[j] + "-" + exons[j + 1] + " (" + (exons[j + 1] - exons[j] + 1) + "bp)" + flankNote(widened, h));
                 }
 
                 PrimersCollector fPrimersList1 = fPrimersList[h];
