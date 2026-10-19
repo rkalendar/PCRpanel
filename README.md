@@ -51,6 +51,7 @@
 |---|---|
 | **Multiplex tiling PCR** | Designs two overlapping pools of amplicons for complete, gap-free target coverage |
 | **No drop-outs** | Regions with the fewest primer options are placed first, and amplicons that conflict with both pools go to extra tubes instead of being dropped |
+| **Panel map & BED tracks** | An SVG map of each panel, and BED tracks for genome browsers and primer-trimming tools |
 | **Single-plex mode** | Non-multiplexed primer design for simpler workflows |
 | **Any-scale input** | Works with sequences of any length and any number of targets |
 | **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
@@ -95,6 +96,7 @@
 │   ┌──────────────────────────────────────────────────────────┐           │
 │   │  Primer report · Pool assignments · Tailed sequences     │           │
 │   │  Coverage summary · Amplicon coordinates                 │           │
+│   │  Panel map (SVG) · BED tracks                            │           │
 │   └──────────────────────────────────────────────────────────┘           │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -103,7 +105,7 @@
 1. **Parse** — Reads GenBank or FASTA input and any existing primer list; identifies target coordinates from feature annotations.
 2. **Detect** — Extracts target regions (exons by default) using a priority-based recognition hierarchy.
 3. **Design** — Generates candidate primers, applies thermodynamic and specificity filters, and arranges amplicons into multiplex-compatible pools, placing the regions with the fewest primer options first. Amplicons that cannot join either pool without a conflict go to extra tubes rather than being dropped.
-4. **Report** — Outputs primer sequences, amplicon coordinates, pool assignments, adapter-tailed sequences, and coverage statistics.
+4. **Report** — Outputs primer sequences, amplicon coordinates, pool assignments, adapter-tailed sequences, and coverage statistics, together with a panel map (SVG) and BED tracks.
 
 ---
 
@@ -729,6 +731,10 @@ PCRpanel generates the following output for each target:
 | **Pool assignments** (`*_panels.txt`) | The panel tube by tube — Panel1, Panel2, and any extra tubes (Panel3, Panel4, …) — with the primer pairs and amplicons of each, ensuring no overlapping amplicons share a tube |
 | **Tailed primers** (`*_panelprimers.txt`) | Full primer sequences including 5′ adapter tails, ready for ordering |
 | **Coverage summary** (end of `*_panels.txt`) | Target region coverage statistics and any gaps in amplicon tiling, preceded by the [panel assembly notes](#interpreting-the-panel-assembly-notes) |
+| **Panel map** (`*_panel.svg`) | The target regions, coloured by coverage, and the amplicons of each tube with their primers, on a map with collapsed introns — see [Panel Map and BED Tracks](#panel-map-and-bed-tracks) |
+| **Primer BED** (`*_panelprimers.bed`) | Panel primers in the primalscheme BED layout, for primer-trimming tools such as `ivar trim` and `samtools ampliconclip` |
+| **Amplicon BED** (`*_amplicons.bed`) | Amplicons coloured by tube, for a genome browser such as IGV |
+| **Target BED** (`*_targets.bed`) | Target regions coloured by coverage, for a genome browser |
 
 ### Interpreting the Primer Report
 
@@ -826,6 +832,28 @@ Widen in that order, re-running after each change and watching the coverage repo
 optimum is counter-productive: very permissive windows fragment the tiling and can lower coverage. Primers
 recovered under relaxed settings pass fewer filters and are more prone to off-target amplification, so
 check them against the reference before ordering, and keep them in a separate pool where practical.
+
+### Panel Map and BED Tracks
+
+Each target also gets a panel map, `*_panel.svg`, which opens in any web browser:
+
+- The **Targets** row shows the target regions: grey when covered in full, amber when partly covered (the percentage is written below), red when no amplicon reaches them. Promoters are drawn outlined. Exons are numbered within their gene in transcription order, and the gene is named where its regions begin.
+- One row per tube — Panel1, Panel2 and any extra tubes — shows its amplicons, pale, with the primers in full colour at the ends. Amplicons that would overlap on screen are drawn on separate lines.
+- Introns are collapsed: each stretch of sequence carrying a target or an amplicon is drawn to scale, and the sequence between two stretches is replaced by a gap labelled with its length.
+- Hovering over a region shows its coordinates, coverage, region number in the coverage report and, where it applies, the widened search flanks; hovering over an amplicon shows its tube, coordinates, size and primers.
+
+The BED tracks use 0-based coordinates and name the sequence by the record ID used in the primer names — the GenBank `VERSION`, or the FASTA ID — so the reference loaded next to them must carry the same name:
+
+| File | Columns | Use |
+|---|---|---|
+| `*_panelprimers.bed` | chrom, start, end, `ID_N_LEFT` / `ID_N_RIGHT`, tube (pool), strand, primer sequence without the adapter tail | Primer trimming of the sequencing reads (`ivar trim`, `samtools ampliconclip`); amplicons are numbered along the sequence |
+| `*_amplicons.bed` | BED9: amplicon `ID_N`, tube as the score, insert between the primers as the thick part, colour of the tube | Genome browser |
+| `*_targets.bed` | BED9: `regionN_<gene>_exon_<k>`, covered fraction in thousandths as the score, colour by coverage | Genome browser |
+
+```
+NG_011977.2	2995	3016	NG_011977.2_1_LEFT	1	+	aagggtcgtgagaagagactc
+NG_011977.2	3170	3191	NG_011977.2_1_RIGHT	1	-	tggtacttctgtcactgcaga
+```
 
 ---
 
