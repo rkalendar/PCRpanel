@@ -162,11 +162,13 @@ public class apanel {
         final String sequence;
         final String name;
         final int[] exons;
+        final List<ExonPromoterExtractor.Region> regions; // annotation of each exon pair; null for FASTA
 
-        SeqRecord(String sequence, String name, int[] exons) {
+        SeqRecord(String sequence, String name, int[] exons, List<ExonPromoterExtractor.Region> regions) {
             this.sequence = sequence;
             this.name = name;
             this.exons = exons;
+            this.regions = regions;
         }
     }
 
@@ -180,7 +182,7 @@ public class apanel {
             int[] exons = regs.stream()
                     .flatMapToInt(r -> java.util.stream.IntStream.of(r.start, r.end))
                     .toArray();
-            return new SeqRecord(sequence, name, exons);
+            return new SeqRecord(sequence, name, exons, regs);
         }
 
         // FASTA fallback — use last valid record
@@ -193,7 +195,7 @@ public class apanel {
                 // Note: returns LAST valid record (preserving original behavior)
                 sequence = rec.sequence;
                 name = recName;
-                return new SeqRecord(sequence, name, exons);
+                return new SeqRecord(sequence, name, exons, null);
             }
         }
         return null; // nothing found
@@ -422,7 +424,7 @@ public class apanel {
                             refsequence, ref, cfg.homology, primers, exons,
                             cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                             cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                            cfg.fTail, cfg.rTail, cfg.e5, cfg.e3);
+                            cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, null);
                 }
                 continue;
             }
@@ -434,7 +436,7 @@ public class apanel {
                     refsequence, ref, cfg.homology, primers, exons,
                     cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                     cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3);
+                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, regs);
         }
     }
 
@@ -446,6 +448,7 @@ public class apanel {
         List<String> nameSequences = new ArrayList<>();
         List<int[]> exonsSequences = new ArrayList<>();
         List<String> fileSequences = new ArrayList<>();
+        List<List<ExonPromoterExtractor.Region>> regionsSequences = new ArrayList<>();
 
         // Phase 1: load all sequences
         for (String tagfile : tagfiles) {
@@ -457,6 +460,7 @@ public class apanel {
             nameSequences.add(rec.name);
             exonsSequences.add(rec.exons);
             fileSequences.add(tagfile);
+            regionsSequences.add(rec.regions);
         }
 
         // Phase 2: design primers file-by-file
@@ -473,12 +477,14 @@ public class apanel {
             String tagfile = fileSequences.get(i);
             String otherSeqs = buildOtherSequences(sequences, i);
 
-            designs.add(designMultiplexTarget(map, tagfile,
+            MultiplexTarget t = designMultiplexTarget(map, tagfile,
                     sequence, name, refsequence, otherSeqs,
                     cfg.homology, primers, exons,
                     cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                     cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3));
+                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3);
+            t.regions = regionsSequences.get(i);
+            designs.add(t);
         }
 
         // Phase 3: one panel for all files, which share the two tubes. Assembling
@@ -736,8 +742,10 @@ public class apanel {
 
         String tagfile;
         String seq;
+        String name;      // record ID, as in the primer names
         int[] exons;      // regions as merged by the design
         int[] cexons;     // regions before merging
+        List<ExonPromoterExtractor.Region> regions; // annotation of the regions; null for FASTA
         PrimersCollector[] fPrimersList;
         PrimersCollector[] rPrimersList;
         int[] widened;
@@ -750,6 +758,7 @@ public class apanel {
         MultiplexTarget t = new MultiplexTarget();
         t.tagfile = tagfile;
         t.seq = seq;
+        t.name = name;
         t.exons = exons;
         t.cexons = exons.clone();
 
@@ -939,11 +948,28 @@ public class apanel {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
                     fileWriter.write(sr1.toString());
                 }
+                writePlot(outDir, stem, new PanelPlot(t.name, seq.length(), cexons, exons, t.regions, t.widened, pcrpanels, true));
             }
 
         } catch (IOException e) {
             System.out.println("Incorrect file name.\n");
         }
+    }
+
+    /** Writes the panel map (SVG) and the BED tracks of one target. */
+    private static void writePlot(Path outDir, String stem, PanelPlot plot) throws IOException {
+        Path svg = outDir.resolve(stem + "_panel.svg");
+        System.out.println("Saving the panel map to a file: " + svg);
+        Files.writeString(svg, plot.svg());
+        Path bed = outDir.resolve(stem + "_panelprimers.bed");
+        System.out.println("Saving the panel primers (BED) to a file: " + bed);
+        Files.writeString(bed, plot.primersBed());
+        bed = outDir.resolve(stem + "_amplicons.bed");
+        System.out.println("Saving the amplicons (BED) to a file: " + bed);
+        Files.writeString(bed, plot.ampliconsBed());
+        bed = outDir.resolve(stem + "_targets.bed");
+        System.out.println("Saving the target regions (BED) to a file: " + bed);
+        Files.writeString(bed, plot.targetsBed());
     }
 
     /** The amplicons of target sequence {@code s} in one pool of the shared panel. */
@@ -1054,7 +1080,10 @@ public class apanel {
         return (dot > 0) ? name.substring(0, dot) : name;
     }
 
-    private static void RunSingleplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3) throws IOException {
+    /**
+     * @param regions annotation of the exon pairs, for the panel map; null for FASTA
+     */
+    private static void RunSingleplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3, List<ExonPromoterExtractor.Region> regions) throws IOException {
         Path in = Paths.get(tagfile);
         String stem = fileStem(in);
         //String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
@@ -1222,6 +1251,7 @@ public class apanel {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
                     fileWriter.write(sr1.toString());
                 }
+                writePlot(outDir, stem, new PanelPlot(name, seq.length(), cexons, exons, regions, pd.getWidenedFlanks(), List.of(pcrpanel), false));
             }
 
         } catch (IOException e) {

@@ -114,7 +114,7 @@ public class ExonPromoterExtractor {
 
     public String getRecordId() {
         return recordId;
-    } 
+    }
 
     public int getSequenceLength() {
         return sequence.length();
@@ -160,7 +160,7 @@ public class ExonPromoterExtractor {
                 }
             }
         }
-        return dna.DNA(sb.toString());
+        return dna.DNA(sb.toString());        //return sb.toString();
     }
 
     /**
@@ -294,10 +294,11 @@ public class ExonPromoterExtractor {
             String transcriptId = "MULTI";
 
             if ("EXON".equals(type)) {
-                int idx = 1;
+                // numbered in transcription order: on the minus strand exon 1 has the highest coordinates
+                int idx = (strand == '-') ? mergedSegs.size() : 1;
                 for (int[] s : mergedSegs) {
                     out.add(new Region(transcriptId, gene, "EXON", String.valueOf(idx), s[0], s[1], strand));
-                    idx++;
+                    idx += (strand == '-') ? -1 : 1;
                 }
             } else {
 // PROMOTER: can become one or more after union (if different TSS are far apart)
@@ -475,7 +476,7 @@ public class ExonPromoterExtractor {
         //    - explicit "exon" features
         //    - "mRNA"/"ncRNA" join(...) location segments
         switch (f.key) {
-            case "ncRNA" -> {
+            case "mRNA", "ncRNA" -> {
                 LocationParsed lp = parseLocation(f.location.toString());
                 if (lp.segments == null || lp.segments.isEmpty()) {
                     return;
@@ -509,7 +510,7 @@ public class ExonPromoterExtractor {
                 return;
             }
 
-            default ->  {
+            default -> {
                 return;
             }
         }

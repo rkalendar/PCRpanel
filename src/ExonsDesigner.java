@@ -43,6 +43,8 @@ public class ExonsDesigner {
     /**
      * Generates a list of PCR fragments without changing the original exon coordinates.
      * exonsArray: [s1,e1,s2,e2,...]  
+     * @param exonsArray
+     * @return 
      */
     public List<PcrFragment> buildPcrFragments(int[] exonsArray) {
         if (exonsArray == null || exonsArray.length % 2 != 0) {
@@ -90,6 +92,5 @@ public class ExonsDesigner {
 
         return fragments;
     }
-
 
 }

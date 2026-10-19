@@ -1,4 +1,3 @@
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -39,6 +38,7 @@ public class FastaIO {
      *
      * @param reffiles list of paths to files
      * @param sink handler function for each record
+     * @throws java.io.IOException
      *
      */
     public static void readFastaStreaming(List<String> reffiles, Consumer<FastaRecord> sink) throws IOException {
@@ -94,6 +94,7 @@ public class FastaIO {
      *
      * @param reffiles list of paths to files
      * @return map ID -> sequence
+     * @throws java.io.IOException
      */
     public static Map<String, String> readAllToMap(List<String> reffiles) throws IOException {
         LinkedHashMap<String, String> map = new LinkedHashMap<>();
@@ -117,6 +118,7 @@ public class FastaIO {
      *
      * @param reffiles list of paths to files
      * @return list of all entries
+     * @throws java.io.IOException
      */
     public static List<FastaRecord> readAllToList(List<String> reffiles) throws IOException {
         List<FastaRecord> records = new ArrayList<>();
@@ -129,6 +131,7 @@ public class FastaIO {
      *
      * @param filepath path to the file
      * @return first record found or null
+     * @throws java.io.IOException
      */
     public static FastaRecord readSingle(String filepath) throws IOException {
         final FastaRecord[] holder = new FastaRecord[1];
@@ -216,45 +219,45 @@ public class FastaIO {
 /*
     public static void main(String[] args) {
         try {
-            // Пример 1: Чтение одного файла
+            // Example 1: Reading a single file
             System.out.println("=== Чтение FASTA файла ===");
             List<String> files = Arrays.asList("example.fasta");
             
-            // Потоковое чтение
+            // Stream reading
             readFastaStreaming(files, record -> {
                 System.out.println(record);
-                System.out.println("  Последовательность: " + record.sequence.substring(0, Math.min(50, record.sequence.length())) + "...");
+                System.out.println("  Sequence: " + record.sequence.substring(0, Math.min(50, record.sequence.length())) + "...");
                 System.out.println();
             });
 
-            // Пример 2: Чтение в список
-            System.out.println("\n=== Чтение в список ===");
+            // Example 2: Reading into a list
+            System.out.println("\n=== Reading aloud ===");
             List<FastaRecord> records = readAllToList(files);
-            System.out.println("Прочитано записей: " + records.size());
+            System.out.println("Read entries: " + records.size());
             
-            // Пример 3: Чтение в карту
-            System.out.println("\n=== Чтение в карту ===");
+            // Example 3: Reading a map
+            System.out.println("\n=== Reading the map ===");
             Map<String, String> seqMap = readAllToMap(files);
             for (String id : seqMap.keySet()) {
-                System.out.println(id + " -> длина: " + seqMap.get(id).length());
+                System.out.println(id + " -> length: " + seqMap.get(id).length());
             }
 
-            // Пример 4: Обратная комплементарная последовательность
+            // Example 4: Reverse complementary sequence
             if (!records.isEmpty()) {
                 System.out.println("\n=== Reverse Complement ===");
                 FastaRecord first = records.get(0);
                 String rc = first.reverseComplement();
-                System.out.println("Оригинал:  " + first.sequence.substring(0, Math.min(30, first.sequence.length())));
+                System.out.println("Original:  " + first.sequence.substring(0, Math.min(30, first.sequence.length())));
                 System.out.println("Rev-Comp:  " + rc.substring(0, Math.min(30, rc.length())));
             }
 
-            // Пример 5: Запись в файл
-            System.out.println("\n=== Запись в файл ===");
+            // Example 5: Writing to a file
+            System.out.println("\n=== Write to file ===");
             writeFasta(records, "output.fasta", 60);
-            System.out.println("Записано в output.fasta");
+            System.out.println("Recorded in output.fasta");
 
         } catch (IOException e) {
-            System.err.println("Ошибка: " + e.getMessage());
+            System.err.println("Error: " + e.getMessage());
             e.printStackTrace();
         }
     }
