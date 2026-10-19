@@ -1,6 +1,6 @@
 # PCRpanel — Custom Amplicon Panel Designer
 
-[![Java](https://img.shields.io/badge/Java-26%2B-orange?logo=openjdk)](https://www.oracle.com/java/technologies/downloads/)
+[![Java](https://img.shields.io/badge/Java-25%2B-orange?logo=openjdk)](https://www.oracle.com/java/technologies/downloads/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Docs](https://img.shields.io/badge/Docs-Online-informational)](https://primerdigital.com/tools/panel.html)
@@ -113,15 +113,17 @@
 
 | Requirement | Details |
 |---|---|
-| **Java** | Version **26** or higher ([download](https://www.oracle.com/java/technologies/downloads/)) |
+| **Java** | Version **25** or higher ([download](https://www.oracle.com/java/technologies/downloads/)) |
 | **OS** | Windows, macOS, or Linux — platform-independent |
 | **RAM** | Default heap is sufficient for most genes; large genomes may need 16–128 GB (see [Memory Configuration](#memory-configuration)) |
+
+PCRpanel is compiled with **JDK 25** (an LTS release), not JDK 26, because Java 26 is still problematic on Linux. The pre-built JAR therefore runs on Java 25 and any later version.
 
 > **Verify your Java version:**
 > ```bash
 > java -version
 > ```
-> If you see a version below 26, update Java or use Conda (see below).
+> If you see a version below 25, update Java or use Conda (see below).
 
 ---
 
@@ -134,27 +136,38 @@
 git clone https://github.com/rkalendar/PCRpanel.git
 cd PCRpanel
 
-# 2. Confirm Java 26+ is on your PATH
+# 2. Confirm Java 25+ is on your PATH
 java -version
 
 # 3. Run (no build step required — the JAR is pre-built)
 java -jar dist/PCRpanel.jar test/config.file
 ```
 
-### Option B — Install Java 26 via Conda
+### Option B — Install Java 25 via Conda
 
-If you don't have Java 26 installed system-wide:
+If you don't have Java 25 installed system-wide:
 
 ```bash
 # Create a dedicated environment
 conda config --add channels conda-forge
 conda config --set channel_priority strict
-conda create -n java26 openjdk=26
-conda activate java26
+conda create -n java25 openjdk=25
+conda activate java25
 
 # Verify
 java -version
 ```
+
+### Option C — Build from source
+
+Compile with JDK 25, or with a newer JDK targeting Java 25, so that the JAR keeps running on Java 25:
+
+```bash
+javac -encoding UTF-8 --release 25 -d build/classes src/*.java
+jar --create --file dist/PCRpanel.jar --main-class apanel -C build/classes .
+```
+
+The NetBeans project (`nbproject/`) is set up the same way: source and target level 25, JDK 25 platform.
 
 ---
 
@@ -1026,7 +1039,7 @@ See [File Masks](#file-masks) for the full mask syntax.
 java -version
 
 # If multiple versions are installed, set JAVA_HOME explicitly
-export JAVA_HOME=/path/to/jdk-26
+export JAVA_HOME=/path/to/jdk-25
 export PATH="$JAVA_HOME/bin:$PATH"
 ```
 
