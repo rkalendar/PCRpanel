@@ -14,7 +14,8 @@ import java.util.Locale;
  *
  * The BED files name the sequence by its record ID, as the primer names do:
  * the primers in the primalscheme layout read by primer-trimming tools, the
- * amplicons coloured by tube, and the targets coloured by coverage.
+ * amplicons coloured by tube, and the targets coloured by coverage. A FASTA
+ * file holds the parts of the targets left uncovered, with their flanks.
  */
 public class PanelPlot {
 
@@ -48,6 +49,7 @@ public class PanelPlot {
         int end;
         int number;        // as in the coverage report
         String label;      // e.g. "COL4A5 exon 4"
+        String fullName;   // e.g. "COL4A5 exon 4 (region 10)"
         String mark;       // drawn above it: exon number, P for a promoter, region number for FASTA
         String gene;
         boolean promoter;
@@ -82,6 +84,7 @@ public class PanelPlot {
     private final int ntubes;
     private final List<Target> targets = new ArrayList<>();
     private final List<Amp> amps = new ArrayList<>();
+    private final List<int[]> covered;  // the amplicons merged, 0-based half-open
     private final RegionNames names;
 
     /**
@@ -119,7 +122,7 @@ public class PanelPlot {
         for (Amp a : amps) {
             iv.add(new int[]{a.start(), a.end()});
         }
-        List<int[]> covered = CoverageReport.merge(iv);
+        covered = CoverageReport.merge(iv);
 
         int n = 0;
         String previousGene = null;
@@ -148,7 +151,8 @@ public class PanelPlot {
                 t.label = "region " + n;
                 t.mark = String.valueOf(n);
             }
-            int design = (merged != null && k < merged.length && merged[k] < 0) ? -merged[k] - 1 : k / 2;
+            t.fullName = names.target(k / 2);
+            int design =(merged != null && k < merged.length && merged[k] < 0) ? -merged[k] - 1 : k / 2;
             t.widened = (widened != null && design < widened.length) ? widened[design] : 0;
             t.coverage = (t.end > t.start) ? CoverageReport.overlap(covered, t.start, t.end) / (double) (t.end - t.start) : 1;
             targets.add(t);
@@ -530,9 +534,101 @@ public class PanelPlot {
         s.append("track name=\"").append(name).append(" targets\" description=\"PCRpanel targets: grey covered, amber partly covered, red not covered\" itemRgb=\"On\"\n");
         for (Target t : targets) {
             s.append(name).append('\t').append(t.start).append('\t').append(t.end).append('\t')
-                    .append("region").append(t.number).append('_').append(t.label.replaceAll("[^A-Za-z0-9_.-]+", "_")).append('\t')
+                    .append(slug(t)).append('\t')
                     .append(Math.round(t.coverage * 1000)).append('\t').append(t.strand).append('\t')
                     .append(t.start).append('\t').append(t.end).append('\t').append(rgb(status(t))).append('\n');
+        }
+        return s.toString();
+    }
+
+    /** A target's name without spaces, e.g. "region10_COL4A5_exon_4", or "region3" for FASTA input. */
+    private static String slug(Target t) {
+        return "region" + t.number + ((t.gene != null) ? "_" + t.label.replaceAll("[^A-Za-z0-9_.-]+", "_") : "");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FASTA of the regions not covered
+    // ═══════════════════════════════════════════════════════════════════════
+    /**
+     * The parts of the targets that no amplicon covers, each with up to
+     * {@code flank} bp of sequence on both sides, as FASTA: the material for
+     * designing their primers by other means. Upper case marks the uncovered
+     * target bases, lower case the flanks and the covered ones.
+     *
+     * A target gives one record, or one per group of uncovered stretches when
+     * they lie more than twice the flank apart. The header holds an ID, the
+     * name of the region as in the reports, then the record and the 1-based,
+     * inclusive coordinates of the fragment, of the target and of its uncovered
+     * stretches, and the coverage of the target. Empty when every target is
+     * covered in full.
+     *
+     * @param sequence the target sequence
+     * @param flank    bp of sequence to add on both sides of an uncovered stretch
+     */
+    public String uncoveredFasta(String sequence, int flank) {
+        StringBuilder s = new StringBuilder();
+        for (Target t : targets) {
+            if (t.coverage >= 1) {
+                continue;
+            }
+            List<int[]> gaps = new ArrayList<>(); // 0-based half-open
+            int pos = t.start;
+            for (int[] c : covered) {
+                if (c[1] <= pos) {
+                    continue;
+                }
+                if (c[0] >= t.end) {
+                    break;
+                }
+                if (c[0] > pos) {
+                    gaps.add(new int[]{pos, c[0]});
+                }
+                pos = Math.max(pos, c[1]);
+            }
+            if (pos < t.end) {
+                gaps.add(new int[]{pos, t.end});
+            }
+
+            // stretches whose flanks would overlap share one fragment
+            List<List<int[]>> groups = new ArrayList<>();
+            for (int[] g : gaps) {
+                List<int[]> last = groups.isEmpty() ? null : groups.get(groups.size() - 1);
+                if (last != null && g[0] - last.get(last.size() - 1)[1] <= 2 * flank) {
+                    last.add(g);
+                } else {
+                    groups.add(new ArrayList<>(List.of(g)));
+                }
+            }
+
+            for (int k = 0; k < groups.size(); k++) {
+                List<int[]> group = groups.get(k);
+                int from = Math.max(0, group.get(0)[0] - flank);
+                int to = Math.min(sequence.length(), group.get(group.size() - 1)[1] + flank);
+                List<String> stretches = new ArrayList<>();
+                for (int[] g : group) {
+                    stretches.add((g[0] + 1) + "-" + g[1]);
+                }
+                s.append('>').append(name).append('_').append(slug(t)).append(groups.size() > 1 ? "_part" + (k + 1) : "")
+                        .append(' ').append(t.fullName)
+                        .append(" loc=").append(name).append(':').append(from + 1).append('-').append(to)
+                        .append(" target=").append(t.start + 1).append('-').append(t.end)
+                        .append(" uncovered=").append(String.join(",", stretches))
+                        .append(" coverage=").append(String.format(Locale.ROOT, "%.1f%%", 100 * t.coverage));
+                if (t.strand == '+' || t.strand == '-') {
+                    s.append(" strand=").append(t.strand);
+                }
+                s.append('\n');
+
+                char[] frag = sequence.substring(from, to).toLowerCase(Locale.ROOT).toCharArray();
+                for (int[] g : group) {
+                    for (int i = g[0]; i < g[1]; i++) {
+                        frag[i - from] = Character.toUpperCase(frag[i - from]);
+                    }
+                }
+                for (int i = 0; i < frag.length; i += 60) {
+                    s.append(frag, i, Math.min(60, frag.length - i)).append('\n');
+                }
+            }
         }
         return s.toString();
     }
