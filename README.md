@@ -51,7 +51,7 @@
 |---|---|
 | **Multiplex tiling PCR** | Designs two overlapping pools of amplicons for complete, gap-free target coverage |
 | **No drop-outs** | Regions with the fewest primer options are placed first, and amplicons that conflict with both pools go to extra tubes instead of being dropped |
-| **Panel map & BED tracks** | An SVG map of each panel, and BED tracks for genome browsers and primer-trimming tools |
+| **Panel map & BED tracks** | An SVG map of each panel, BED tracks for genome browsers and primer-trimming tools, and a FASTA file of the regions left uncovered |
 | **Single-plex mode** | Non-multiplexed primer design for simpler workflows |
 | **Any-scale input** | Works with sequences of any length and any number of targets |
 | **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
@@ -748,6 +748,7 @@ PCRpanel generates the following output for each target:
 | **Primer BED** (`*_panelprimers.bed`) | Panel primers in the primalscheme BED layout, for primer-trimming tools such as `ivar trim` and `samtools ampliconclip` |
 | **Amplicon BED** (`*_amplicons.bed`) | Amplicons coloured by tube, for a genome browser such as IGV |
 | **Target BED** (`*_targets.bed`) | Target regions coloured by coverage, for a genome browser |
+| **Uncovered regions** (`*_uncovered.fasta`) | The parts of the targets left uncovered, with their flanking sequence, for designing their primers by other means — see [Regions Left Uncovered](#regions-left-uncovered); written only when some target is not covered in full |
 
 ### Region Names
 
@@ -895,6 +896,29 @@ Widen in that order, re-running after each change and watching the coverage repo
 optimum is counter-productive: very permissive windows fragment the tiling and can lower coverage. Primers
 recovered under relaxed settings pass fewer filters and are more prone to off-target amplification, so
 check them against the reference before ordering, and keep them in a separate pool where practical.
+
+### Regions Left Uncovered
+
+When some targets are not covered in full, `*_uncovered.fasta` holds the sequence of their uncovered parts, each with `maxPCR` bp on both sides: the stretch in which the primers of any amplicon of up to `maxPCR` bp covering it must lie. Use it to design primers for these regions with other settings or another tool, or to see why they failed. The file is not written when every target is covered in full.
+
+```
+>NG_011977.2_region10_COL4A5_exon_4 COL4A5 exon 4 (region 10) loc=NG_011977.2:128409-129553 target=128959-129003 uncovered=128959-129003 coverage=0.0% strand=+
+…
+catttttcagGGTGATGATGGAATTCCAGGGCCACCAGGACCAAAAGGAATCAGAgtaag
+…
+```
+
+In the sequence, upper case marks the target bases that no amplicon covers, and lower case the flanks and the parts of the target already covered. Coordinates in the header are 1-based and inclusive, as in GenBank:
+
+| Header field | Meaning |
+|---|---|
+| ID | Record ID, region number and [name](#region-names), without spaces. A target whose uncovered stretches lie more than twice `maxPCR` apart, such as a whole genome with several gaps, gets one record per group of stretches: `_part1`, `_part2`, … |
+| Name | The region as named in the reports, with its number in the coverage report |
+| `loc` | Record and coordinates of the fragment |
+| `target` | Coordinates of the whole target region |
+| `uncovered` | Its stretches that no amplicon covers, comma-separated |
+| `coverage` | Covered fraction of the target |
+| `strand` | Strand of the gene, when annotated. The fragment itself is always given on the strand of the record |
 
 ### Panel Map and BED Tracks
 
@@ -1118,7 +1142,7 @@ See [Memory Configuration](#memory-configuration) for genome-size-specific recom
 
 ### Primers not found for some targets
 
-The [Panel assembly](#interpreting-the-panel-assembly-notes) section lists the regions for which no primer pair exists at the current settings. To recover them:
+The [Panel assembly](#interpreting-the-panel-assembly-notes) section lists the regions for which no primer pair exists at the current settings, and `*_uncovered.fasta` holds their sequence with flanks, ready for another design tool (see [Regions Left Uncovered](#regions-left-uncovered)). To recover them in PCRpanel:
 
 - **Widen Tm range:** Try `minTm=58` and `maxTm=64`.
 - **Increase primer length range:** Try `minLen=17` and `maxLen=28`.
