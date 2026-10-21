@@ -25,11 +25,13 @@ public class CoverageReport {
         final int start;
         final int end;
         final int index;
+        final String label;   // as on the panel map, e.g. "COL4A5 exon 4"
 
-        Region(int index, int start, int end) {
+        Region(int index, int start, int end, String label) {
             this.index = index;
             this.start = start;
             this.end = end;
+            this.label = label;
         }
 
         int length() {
@@ -44,8 +46,10 @@ public class CoverageReport {
      * @param exonBoundaries pairs of start/end positions, as passed to the
      *                       designer before exon merging. Negative entries mark
      *                       regions folded into a neighbour and are skipped.
+     * @param info           annotation of each boundary pair, or null for FASTA
+     *                       input
      */
-    public CoverageReport(int[] exonBoundaries) {
+    public CoverageReport(int[] exonBoundaries, List<ExonPromoterExtractor.Region> info) {
         int n = 0;
         for (int i = 0; i + 1 < exonBoundaries.length; i += 2) {
             int[] t = targetInterval(exonBoundaries[i], exonBoundaries[i + 1]);
@@ -53,7 +57,8 @@ public class CoverageReport {
                 continue;
             }
             n++;
-            regions.add(new Region(n, t[0], t[1]));
+            ExonPromoterExtractor.Region r = (info != null && i / 2 < info.size()) ? info.get(i / 2) : null;
+            regions.add(new Region(n, t[0], t[1], (r != null) ? RegionNames.label(r) : "region " + n));
         }
     }
 
@@ -154,10 +159,8 @@ public class CoverageReport {
             if (c < r.length()) {
                 nGaps++;
                 gapBp += r.length() - c;
-                if (gaps.length() > 0) {
-                    gaps.append(", ");
-                }
-                gaps.append(r.index).append(" (").append(pct(c, r.length())).append(")");
+                gaps.append(r.index).append('\t').append(r.label).append('\t').append(r.start + 1).append('-')
+                        .append(r.end).append('\t').append(pct(c, r.length())).append('\n');
             }
         }
         if (nGaps == 0) {
@@ -166,7 +169,7 @@ public class CoverageReport {
             s.append("\nRegions not covered in full: ").append(nGaps).append(" of ")
                     .append(regions.size()).append(", leaving ").append(gapBp)
                     .append(" bp of the target without an amplicon.\n");
-            s.append("Region (coverage): ").append(gaps).append("\n");
+            s.append("Region\tTarget\tPosition\tCoverage\n").append(gaps);
             s.append("\nA region is left uncovered when no primer pair satisfying the current length, Tm,\n");
             s.append("complexity and masking constraints could be placed around it. To close such gaps,\n");
             s.append("widen minPCR/maxPCR, minLen/maxLen and minTm/maxTm, or relax the masking settings\n");
