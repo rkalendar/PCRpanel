@@ -22,6 +22,9 @@ class Pair {
     String fprimer;     // primer sequence
     String fprimername; // name
 
+    String note;        // set when the pair was forced into the panel despite a conflict
+    int seq;            // target sequence (file) of the pair, when several share the pools
+
     public void SetPanelID(int n) {
         panelID = n;
     }
