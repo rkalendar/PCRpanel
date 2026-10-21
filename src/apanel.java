@@ -514,7 +514,7 @@ public class apanel {
 
         // Phase 4: reports, file by file
         for (int s = 0; s < designs.size(); s++) {
-            reportMultiplexTarget(designs.get(s), s, panels, cfg.outPath);
+            reportMultiplexTarget(designs.get(s), s, panels, cfg.outPath, cfg.maxPcr);
         }
     }
 
@@ -815,8 +815,11 @@ public class apanel {
     /**
      * Writes the reports of target {@code s}, whose amplicons the shared
      * {@code panels} carry.
+     *
+     * @param maxpcr maximum amplicon size, also the flank written around the
+     *               regions left uncovered
      */
-    private static void reportMultiplexTarget(MultiplexTarget t, int s, PanelsCollector panels, String outpath) {
+    private static void reportMultiplexTarget(MultiplexTarget t, int s, PanelsCollector panels, String outpath, int maxpcr) {
         String tagfile = t.tagfile;
         String seq = t.seq;
         int[] exons = t.exons;
@@ -943,17 +946,32 @@ public class apanel {
                 }
             }
 
+            PanelPlot plot = new PanelPlot(t.name, seq.length(), cexons, exons, t.regions, t.widened, pcrpanels, true);
             if (!pcrcol.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
                     fileWriter.write(sr1.toString());
                 }
-                writePlot(outDir, stem, new PanelPlot(t.name, seq.length(), cexons, exons, t.regions, t.widened, pcrpanels, true));
+                writePlot(outDir, stem, plot);
             }
+            writeUncovered(outDir, stem, plot.uncoveredFasta(seq, maxpcr));
 
         } catch (IOException e) {
             System.out.println("Incorrect file name.\n");
         }
+    }
+
+    /**
+     * Writes the parts of the targets left uncovered, with their flanks, as
+     * FASTA; nothing when every target is covered in full.
+     */
+    private static void writeUncovered(Path outDir, String stem, String fasta) throws IOException {
+        if (fasta.isEmpty()) {
+            return;
+        }
+        Path file = outDir.resolve(stem + "_uncovered.fasta");
+        System.out.println("Saving the regions not covered in full (FASTA) to a file: " + file);
+        Files.writeString(file, fasta);
     }
 
     /** Writes the panel map (SVG) and the BED tracks of one target. */
@@ -1256,13 +1274,15 @@ public class apanel {
                 }
             }
 */
+            PanelPlot plot = new PanelPlot(name, seq.length(), cexons, exons, regions, pd.getWidenedFlanks(), List.of(pcrpanel), false);
             if (!pcrcol.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
                     fileWriter.write(sr1.toString());
                 }
-                writePlot(outDir, stem, new PanelPlot(name, seq.length(), cexons, exons, regions, pd.getWidenedFlanks(), List.of(pcrpanel), false));
+                writePlot(outDir, stem, plot);
             }
+            writeUncovered(outDir, stem, plot.uncoveredFasta(seq, maxpcr));
 
         } catch (IOException e) {
             System.out.println("Incorrect file name.\n");
