@@ -749,6 +749,21 @@ PCRpanel generates the following output for each target:
 | **Amplicon BED** (`*_amplicons.bed`) | Amplicons coloured by tube, for a genome browser such as IGV |
 | **Target BED** (`*_targets.bed`) | Target regions coloured by coverage, for a genome browser |
 
+### Region Names
+
+The reports and the panel map name each target region by its gene and its exon number in the annotation, followed by its region number:
+
+| Name | Region |
+|---|---|
+| `COL4A5 exon 5 (region 11)` | One exon |
+| `COL4A5 promoter (region 4)` | A promoter |
+| `COL4A5 exons 5-6 (region 11)` | A design region: exons 5 and 6, merged |
+| `COL4A6 promoter, exons 1-3; COL4A5 promoter, exon 1 (region 1)` | A design region holding targets of two genes |
+| `region 3` | A region of a FASTA input, which has no annotation |
+
+- **Region number** — the targets of a sequence are numbered 1, 2, 3, … along it, promoters and the exons of neighbouring genes included. This is the number used in the coverage report and in the `*_targets.bed` names. It differs from the exon number whenever other targets come first: in NG_011977.2, three COL4A6 exons and three promoters precede COL4A5 exon 1, so COL4A5 exon 5 is region 11.
+- **Design regions** — targets merged into one design region (see [Stage 1](#stage-1--candidate-generation)) are named together, gene by gene, with runs of exon numbers joined, under the number of the first of them. The primer report and the panel listing name design regions; the coverage report, the panel assembly notes and the target BED name each target on its own.
+
 ### Interpreting the Primer Report
 
 Each primer entry in the report includes:
@@ -765,12 +780,40 @@ Each primer entry in the report includes:
 | **Amplicon size** | Amplicon length in base pairs |
 | **Pool** | Tube the pair is listed under in `*_panels.txt`: Panel1 or Panel2, or an extra tube (Panel3, Panel4, …) |
 
-The primer report also marks two kinds of regions in their headers:
+The targets are listed in order, each under a heading with its [name](#region-names), its 1-based position on the target sequence and its length, followed by the primers found for it:
+
+```
+COL4A5 exon 4 (region 10): 128959-129003 45bp
+COL4A5 exons 5-6 (region 11): 133706-133898 193bp
+COL4A5 exon 6 (region 12): 133836-133898 (63bp) join with region 11
+```
+
+The heading of a design region spans all the targets merged into it. A heading may end in one of two marks:
 
 | Mark | Meaning |
 |---|---|
-| `join with N` | The region was merged into region N, whose primers cover it; no primers are listed under it |
+| `join with region N` | The target was merged into design region N, whose primers cover it; no primers are listed under it |
 | `search flanks widened to N bp` | The default flanks could not cover the region, so its primers were searched up to N bp from it |
+
+### Interpreting the Panel Listing
+
+`*_panels.txt` lists the panel tube by tube. Each amplicon is given by its two primers, with their adapter tails, and a line naming its region:
+
+```
+Panel1:
+Name	Sequence	Length	Tm(°C)	GC(%)	Linguistic_Complexity(%)
+…
+NG_011977.2:F_104661-104685	acactctttccctacacgacgctcttccgatcttcctgagaggtaactgttatttgca	25	62.7	40.0	95
+NG_011977.2:R_104907-104883	gtgactggagttcagacgtgtgctcttccgatctttcaaatgccaatctaagacctcac	25	62.2	40.0	90
+COL4A5 exon 2 (region 8) PCR amplicon=247 bp Tm=77.3 CG%=36.8
+```
+
+| Field | Meaning |
+|---|---|
+| **Region** | The [design region](#region-names) the primer pair was designed for; an amplicon can also cover parts of neighbouring regions |
+| **PCR amplicon** | Amplicon length on the target sequence, primers included, adapter tails excluded |
+| **Tm**, **CG%** | Melting temperature and GC content of the whole amplicon, adapter tails excluded |
+| `FORCED (…)` | *Single-plex only:* the amplicon was placed despite the conflict named in brackets; see the panel assembly notes below |
 
 ### Interpreting the Panel Assembly Notes
 
@@ -780,15 +823,15 @@ When assembling the panel took more than tiling the two pools, `*_panels.txt` co
 Panel assembly
 Amplicons that conflict with both Panel1 and Panel2 are amplified in extra tubes, each free of conflicts, so that their regions are not dropped: Panel3 (7)
 The panel as a whole needs 3 tubes.
-Regions without any candidate primer pair at the current settings: 10, 16, 42, 46
+Regions without any candidate primer pair at the current settings: COL4A5 exon 4 (region 10), COL4A5 exon 10 (region 16), COL4A5 exon 36 (region 42), COL4A5 exon 40 (region 46)
 ```
 
 | Line | Meaning |
 |---|---|
 | **Extra tubes** | How many of this target's amplicons are in each extra tube. Each tube is a separate multiplex reaction — amplify every tube listed |
 | **The panel as a whole needs N tubes** | Total number of tubes, counting those opened for the other input files of the run, which share the tubes |
-| **Regions without any candidate primer pair** | Regions, numbered as in the coverage report, for which no primer pair exists at the current settings even with widened search flanks. Relax the settings as described in [Closing Coverage Gaps](#closing-coverage-gaps) |
-| **Amplicons placed despite a conflict** *(single-plex only)* | Amplicons included although their primers dimerise with another amplicon's primers. They are also marked `FORCED (…)` in the panel listing, with the conflicting primers named |
+| **Regions without any candidate primer pair** | Targets, each [named](#region-names) on its own with its number in the coverage report, for which no primer pair exists at the current settings even with widened search flanks. Relax the settings as described in [Closing Coverage Gaps](#closing-coverage-gaps) |
+| **Amplicons placed despite a conflict** *(single-plex only)* | Amplicons included although their primers dimerise with another amplicon's primers, one per line: the design region, the tube, the two primers and the conflicting primers. They are also marked `FORCED (…)` in the [panel listing](#interpreting-the-panel-listing) |
 
 ### Interpreting the Coverage Report
 
@@ -808,7 +851,12 @@ Panel3  7          1695               17.1%     5             3        51
 All pools combined 82  9604           96.8%     54            1        4
 
 Regions not covered in full: 5 of 59, leaving 317 bp of the target without an amplicon.
-Region (coverage): 10 (0.0%), 16 (0.0%), 17 (50.0%), 42 (0.0%), 46 (0.0%)
+Region  Target          Position       Coverage
+10      COL4A5 exon 4   128959-129003  0.0%
+16      COL4A5 exon 10  140987-141049  0.0%
+17      COL4A5 exon 11  143029-143064  50.0%
+42      COL4A5 exon 36  191287-191426  0.0%
+46      COL4A5 exon 40  232210-232260  0.0%
 ```
 
 | Column | Meaning |
@@ -819,8 +867,10 @@ Region (coverage): 10 (0.0%), 16 (0.0%), 17 (50.0%), 42 (0.0%), 46 (0.0%)
 | **Coverage** | The same figure as a percentage of the whole target |
 | **Regions full / Partial / Uncovered** | Annotated regions covered completely, in part, and not at all |
 
-The per-region list names every region that is not covered in full, with the fraction achieved, so gaps can
-be located without reconstructing them from amplicon coordinates.
+The per-region table lists every target that is not covered in full: its region number, its gene and exon
+(see [Region Names](#region-names)), its 1-based position on the target sequence and the fraction covered,
+so gaps can be located without reconstructing them from amplicon coordinates. The same targets are drawn
+red or amber on the [panel map](#panel-map-and-bed-tracks).
 
 ### Closing Coverage Gaps
 
@@ -853,7 +903,20 @@ Each target also gets a panel map, `*_panel.svg`, which opens in any web browser
 - The **Targets** row shows the target regions: grey when covered in full, amber when partly covered (the percentage is written below), red when no amplicon reaches them. Promoters are drawn outlined. Exons are numbered within their gene in transcription order, and the gene is named where its regions begin.
 - One row per tube — Panel1, Panel2 and any extra tubes — shows its amplicons, pale, with the primers in full colour at the ends. Amplicons that would overlap on screen are drawn on separate lines.
 - Introns are collapsed: each stretch of sequence carrying a target or an amplicon is drawn to scale, and the sequence between two stretches is replaced by a gap labelled with its length.
-- Hovering over a region shows its coordinates, coverage, region number in the coverage report and, where it applies, the widened search flanks; hovering over an amplicon shows its tube, coordinates, size and primers.
+- Hovering over a region shows its [name](#region-names) with its number in the coverage report, its coordinates, strand and coverage and, where it applies, the widened search flanks. Hovering over an amplicon shows its tube, the design region it was designed for, as named in the panel listing, its coordinates, size and primers:
+
+```
+COL4A5 exon 5 (region 11)
+133706-133750, 45 bp, + strand
+Covered: 0.0% (no primer pair reaches it)
+```
+
+```
+Panel1, COL4A5 exon 2 (region 8)
+104661-104907, 247 bp
+NG_011977.2:F_104661-104685 (25 nt)
+NG_011977.2:R_104907-104883 (25 nt)
+```
 
 The BED tracks use 0-based coordinates and name the sequence by the record ID used in the primer names — the GenBank `VERSION`, or the FASTA ID — so the reference loaded next to them must carry the same name:
 
