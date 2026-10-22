@@ -49,6 +49,62 @@ public class PrimerDesign {
     private PrimersCollector[] reversePrimers;
     private int[] widenedFlanks; // per region: search flank (bp) used by the rescue, 0 = default
     private List<Pair> allPairs = new ArrayList<>(); // every valid primer combination, for closing gaps
+    private SearchMap search = new SearchMap(false);
+
+    /**
+     * What the primer search found along the target sequence, for the panel
+     * map: where no primer can bind and why, where the primers that pass the
+     * filters lie, and why a region got no primer pair. Coordinates are 0-based
+     * half-open on the sense strand.
+     */
+    public static final class SearchMap {
+
+        /** k-mers that occur more than once in the target, the reference sequences or the other targets */
+        public final List<int[]> repeats = new ArrayList<>();
+        /** k-mers that occur more than once in the genome reference */
+        public final List<int[]> genome = new ArrayList<>();
+        /**
+         * Bases that no primer of the minimum length can include: its linguistic
+         * complexity is below minLC, or it holds a simple sequence repeat.
+         * Checked within maxPCR of the targets only.
+         */
+        public final List<int[]> lowComplexity = new ArrayList<>();
+        /** false when no genome reference was given, so {@link #genome} is empty by default */
+        public final boolean genomeChecked;
+        /** the candidate primers of every design region */
+        public final List<Site> sites = new ArrayList<>();
+        /** per design region, why it has no primer pair; null where it has one */
+        public final List<String> pairing = new ArrayList<>();
+
+        SearchMap(boolean genomeChecked) {
+            this.genomeChecked = genomeChecked;
+        }
+
+        /** Why design region {@code region} has no primer pair, or null. */
+        public String pairing(int region) {
+            return (region >= 0 && region < pairing.size()) ? pairing.get(region) : null;
+        }
+    }
+
+    /** A candidate primer: one that passed every filter, paired or not. */
+    public static final class Site {
+
+        public final boolean forward;
+        public final int start;     // binding site on the sense strand, 0-based half-open
+        public final int end;
+        public final String name;
+        public final double tm;
+        public final int region;    // design region, 0-based as Pair.exonid
+
+        Site(boolean forward, int start, int end, String name, double tm, int region) {
+            this.forward = forward;
+            this.start = start;
+            this.end = end;
+            this.name = name;
+            this.tm = tm;
+            this.region = region;
+        }
+    }
 
     /**
      * @param genomeKmerSet set of encoded k-mer hashes from the reference
@@ -111,6 +167,11 @@ public class PrimerDesign {
      */
     public List<Pair> getAllPairs() {
         return allPairs;
+    }
+
+    /** What the primer search found, for the panel map; set by {@link #runDesign}. */
+    public SearchMap getSearchMap() {
+        return search;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -230,8 +291,14 @@ public class PrimerDesign {
             senseMask = new MaskingSequence(GENOME_KMER_SIZE).mask(sequence + referenceSeq + fastaSeq);
         }
 
-        senseMask = applyGenomeMasking(senseMask, sequence, GENOME_KMER_SIZE);
         senseMask = Arrays.copyOf(senseMask, seqLen);
+        int[] genomeMask = applyGenomeMasking(new int[seqLen], sequence, GENOME_KMER_SIZE);
+        search = new SearchMap(genomeKmerSet != null && !genomeKmerSet.isEmpty());
+        search.repeats.addAll(stretches(senseMask));
+        search.genome.addAll(stretches(genomeMask));
+        for (int i = 0; i < seqLen; i++) {
+            senseMask[i] += genomeMask[i];
+        }
 
         // Antisense masks are the sense masks in reverse order
         int[] antisenseMask = reverseArray(senseMask, seqLen);
@@ -239,6 +306,7 @@ public class PrimerDesign {
 
         // ── Merge overlapping / close exons ──────────────────────────────
         int[] targetBoundaries = exonBoundaries.clone(); // the regions to cover, before merging
+        search.lowComplexity.addAll(lowComplexity(targetBoundaries, maxPcrProduct));
         mergeExons(minPcrProduct, maxPcrProduct);
 
         if (exonBoundaries.length < 2) {
@@ -266,6 +334,7 @@ public class PrimerDesign {
                 reversePrimers[taskIndex] = buildCollector(new ArrayList<>(), false, seqLen);
                 setTaskMetadata(forwardPrimers[taskIndex], taskIndex + 1, exonStart, exonEnd);
                 setTaskMetadata(reversePrimers[taskIndex], taskIndex + 1, exonStart, exonEnd);
+                search.pairing.add(null);
                 taskIndex++;
                 continue;
             }
@@ -291,6 +360,9 @@ public class PrimerDesign {
                     reversePrimers[taskIndex] = defaultReverse;
                 }
             }
+
+            addSites(taskIndex);
+            search.pairing.add(pairingNote(taskIndex, exonStart, exonEnd, minPcrProduct, maxPcrProduct));
 
             // ── Collect valid pair ───────────────────────────────────────
             if (forwardPrimers[taskIndex].Amount() > 0 && reversePrimers[taskIndex].Amount() > 0) {
@@ -365,6 +437,88 @@ public class PrimerDesign {
             n += t[1] - t[0];
         }
         return n;
+    }
+
+    /** Records the candidate primers of region {@code taskIndex} for the panel map. */
+    private void addSites(int taskIndex) {
+        PrimersCollector fp = forwardPrimers[taskIndex];
+        for (int i = 0; i < fp.Amount(); i++) {
+            int x = fp.getPrimerLocations()[i];
+            search.sites.add(new Site(true, x, x + fp.getPrimerLengths()[i], fp.getpPrimerName()[i], fp.getTms()[i], taskIndex));
+        }
+        PrimersCollector rp = reversePrimers[taskIndex];
+        for (int i = 0; i < rp.Amount(); i++) {
+            int x = rp.getPrimerLocations()[i]; // 5' end, the right end of the binding site
+            search.sites.add(new Site(false, x - rp.getPrimerLengths()[i] + 1, x + 1, rp.getpPrimerName()[i], rp.getTms()[i], taskIndex));
+        }
+    }
+
+    /**
+     * Why region {@code taskIndex} gets no primer pair, or null when it gets
+     * one: the pairing rules of {@link PCRcollector#pairAllPrimers} applied to
+     * its candidate primers.
+     */
+    private String pairingNote(int taskIndex, int exonStart, int exonEnd, int minPcr, int maxPcr) {
+        PrimersCollector fp = forwardPrimers[taskIndex];
+        PrimersCollector rp = reversePrimers[taskIndex];
+        int nf = fp.Amount();
+        int nr = rp.Amount();
+        if (nf == 0 && nr == 0) {
+            return "no forward or reverse primer passes the filters";
+        }
+        if (nf == 0) {
+            return "no forward primer passes the filters (" + nr + " reverse)";
+        }
+        if (nr == 0) {
+            return "no reverse primer passes the filters (" + nf + " forward)";
+        }
+        int exon1 = exonStart;
+        int exon2 = exonEnd;
+        if (exon2 - exon1 < minPcr) { // a short region needs an amplicon spanning it
+            exon1 = exonEnd;
+            exon2 = exonStart;
+        }
+        int[] fx = fp.getPrimerLocations();
+        int[] rx = rp.getPrimerLocations();
+        int longestBelow = -1;              // amplicon sizes as reported, 1 + rx - fx
+        int shortestAbove = Integer.MAX_VALUE;
+        int inRange = 0;
+        int dimers = 0;
+        for (int f = 0; f < nf; f++) {
+            for (int r = 0; r < nr; r++) {
+                int tpcr = rx[r] - fx[f];
+                if (rx[r] <= 0 || rx[r] <= exon1 || fx[f] >= exon2 || tpcr <= 0) {
+                    continue;
+                }
+                if (tpcr < minPcr) {
+                    longestBelow = Math.max(longestBelow, tpcr + 1);
+                } else if (tpcr > maxPcr) {
+                    shortestAbove = Math.min(shortestAbove, tpcr + 1);
+                } else {
+                    inRange++;
+                    if (Oligo.quickDimer(fp.getPrimer()[f], rp.getPrimer()[r]) != 0) {
+                        dimers++;
+                    }
+                }
+            }
+        }
+        if (inRange > dimers) {
+            return null;
+        }
+        if (inRange > 0) {
+            return "all " + inRange + " pairs of " + minPcr + "-" + maxPcr + " bp form a primer-dimer";
+        }
+        String found = nf + " forward and " + nr + " reverse primers, but ";
+        if (longestBelow > 0 && shortestAbove < Integer.MAX_VALUE) {
+            return found + "their pairs give " + longestBelow + " bp or less, or " + shortestAbove + " bp or more, none within minPCR-maxPCR (" + minPcr + "-" + maxPcr + " bp)";
+        }
+        if (shortestAbove < Integer.MAX_VALUE) {
+            return found + "the shortest pair gives " + shortestAbove + " bp, longer than maxPCR (" + maxPcr + " bp)";
+        }
+        if (longestBelow > 0) {
+            return found + "the longest pair gives " + longestBelow + " bp, shorter than minPCR (" + minPcr + " bp)";
+        }
+        return found + "no forward primer lies upstream of a reverse primer around the region";
     }
 
     /**
@@ -664,5 +818,72 @@ public class PrimerDesign {
             }
         }
         return false;
+    }
+
+    /** The stretches where {@code mask} is set, 0-based half-open. */
+    private static List<int[]> stretches(int[] mask) {
+        List<int[]> out = new ArrayList<>();
+        int start = -1;
+        for (int i = 0; i <= mask.length; i++) {
+            boolean set = i < mask.length && mask[i] > 0;
+            if (set && start < 0) {
+                start = i;
+            } else if (!set && start >= 0) {
+                out.add(new int[]{start, i});
+                start = -1;
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Bases within {@code reach} bp of the targets that no primer of the
+     * minimum length can include, because every such window falls below the
+     * minimum linguistic complexity or holds a simple sequence repeat; 0-based
+     * half-open stretches. Only the surroundings of the targets are checked, as
+     * only there can their primers lie.
+     */
+    private List<int[]> lowComplexity(int[] targetBoundaries, int reach) {
+        int seqLen = sequence.length();
+        List<int[]> areas = new ArrayList<>();
+        for (int k = 0; k + 1 < targetBoundaries.length; k += 2) {
+            int[] t = CoverageReport.targetInterval(targetBoundaries[k], targetBoundaries[k + 1]);
+            if (t != null) {
+                areas.add(new int[]{Math.max(0, t[0] - reach), Math.min(seqLen, t[1] + reach)});
+            }
+        }
+        primer calculator = new primer();
+        List<int[]> out = new ArrayList<>();
+        for (int[] a : CoverageReport.merge(areas)) {
+            // windows reach past the area, so that its edge bases are judged like the others
+            int from = Math.max(0, a[0] - minPrimerLength);
+            int to = Math.min(seqLen, a[1] + minPrimerLength);
+            int windows = to - from - minPrimerLength + 1;
+            if (windows <= 0) {
+                continue;
+            }
+            int[] passing = new int[windows + 1]; // passing[w]: windows before w that pass
+            for (int w = 0; w < windows; w++) {
+                String s = sequence.substring(from + w, from + w + minPrimerLength);
+                boolean pass = calculator.getLC(s) >= minLinguisticComplexity && !containsSSR(s);
+                passing[w + 1] = passing[w] + (pass ? 1 : 0);
+            }
+            int start = -1;
+            for (int i = a[0]; i <= a[1]; i++) {
+                boolean low = false;
+                if (i < a[1]) {
+                    int lo = Math.max(0, i - from - minPrimerLength + 1); // windows holding base i
+                    int hi = Math.min(windows - 1, i - from);
+                    low = hi < lo || passing[hi + 1] - passing[lo] == 0;
+                }
+                if (low && start < 0) {
+                    start = i;
+                } else if (!low && start >= 0) {
+                    out.add(new int[]{start, i});
+                    start = -1;
+                }
+            }
+        }
+        return out;
     }
 }

@@ -7,10 +7,13 @@ import java.util.Locale;
  * Panel map (SVG) and BED tracks of one target sequence.
  *
  * The map draws the target regions, coloured by how much of them the panel
- * covers, and under them the amplicons of each tube with their primers. Introns
- * are collapsed: every stretch of sequence that carries a target or an amplicon
- * is drawn to scale, and the stretches between them become a gap labelled with
- * their length, so that the 100 bp exons of a 100 kb gene stay visible.
+ * covers, under them the stretches where no primer can bind and why, the
+ * candidate primers that passed the filters, and the amplicons of each tube
+ * with their primers. Introns are collapsed: every
+ * stretch of sequence that carries a target or an amplicon is drawn to scale,
+ * and the stretches between them become a gap labelled with their length, so
+ * that the 100 bp exons of a 100 kb gene stay visible. A target not covered in
+ * full is drawn with the flanks its primers could lie in.
  *
  * The BED files name the sequence by its record ID, as the primer names do:
  * the primers in the primalscheme layout read by primer-trimming tools, the
@@ -26,6 +29,11 @@ public class PanelPlot {
     private static final String UNCOVERED = "#d03b3b";
     private static final String INK = "#2c2c2a";
     private static final String MUTED = "#5f5e5a";
+    // where primers cannot bind; checked for colour-blind separation as a set
+    private static final String REPEAT = "#a65577";
+    private static final String GENOME_REPEAT = "#8a8a1a";
+    private static final String LOW_COMPLEXITY = "#1d8fb8";
+    private static final String CANDIDATE = "#73726c";
 
     private static final int WIDTH = 1200;
     private static final int LEFT = 90;              // column of track names
@@ -41,6 +49,9 @@ public class PanelPlot {
     private static final int LANE_H = 14;
     private static final int NOTE_H = 14;
     private static final int ROW_GAP = 20;
+    private static final int MASK_BAR = 4;           // px per reason in the Masked row
+    private static final int SITE_H = 6;             // px per strand in the Candidates row
+    private static final int LEGEND2_H = 18;         // second legend line, for the Masked and Candidates rows
 
     /** A target region, 0-based half-open. */
     private static final class Target {
@@ -54,8 +65,23 @@ public class PanelPlot {
         String gene;
         boolean promoter;
         char strand = '.';
+        int design;        // its design region, 0-based as Pair.exonid
         int widened;       // search flank of its design region, 0 = default
         double coverage;
+    }
+
+    /** Stretches where primers cannot bind for one reason: one bar of the Masked row. */
+    private static final class MaskTrack {
+
+        final String name;
+        final String colour;
+        final List<int[]> stretches; // 0-based half-open, in order
+
+        MaskTrack(String name, String colour, List<int[]> stretches) {
+            this.name = name;
+            this.colour = colour;
+            this.stretches = stretches;
+        }
     }
 
     /** An amplicon in its tube (1-based). */
@@ -86,6 +112,9 @@ public class PanelPlot {
     private final List<Amp> amps = new ArrayList<>();
     private final List<int[]> covered;  // the amplicons merged, 0-based half-open
     private final RegionNames names;
+    private final List<MaskTrack> maskTracks = new ArrayList<>(); // empty: no Masked row
+    private final PrimerDesign.SearchMap search; // null: no Masked and Candidates rows
+    private final int flank;            // bp shown around a target not covered in full
 
     /**
      * @param name      record ID, as in the primer names
@@ -98,13 +127,27 @@ public class PanelPlot {
      *                  the default; may be null
      * @param tubes     amplicons of this sequence per tube, index 0 = Panel1
      * @param multiplex false for a single-plex panel, drawn as one pool
+     * @param search    what the primer search found: where primers cannot bind
+     *                  and why, the candidate primers, why a region got no
+     *                  pair; null leaves the Masked and Candidates rows out
+     * @param flank     maxPCR, the reach of a target's primers: the sequence
+     *                  shown around a target not covered in full; 0 for none
      */
     public PanelPlot(String name, int seqLen, int[] bounds, int[] merged, List<ExonPromoterExtractor.Region> info,
-            int[] widened, List<List<Pair>> tubes, boolean multiplex) {
+            int[] widened, List<List<Pair>> tubes, boolean multiplex, PrimerDesign.SearchMap search, int flank) {
         this.name = name;
         this.seqLen = seqLen;
         this.multiplex = multiplex;
         this.names = new RegionNames(merged, info);
+        this.search = search;
+        this.flank = flank;
+        if (search != null) {
+            maskTracks.add(new MaskTrack("repeat", REPEAT, search.repeats));
+            if (search.genomeChecked) {
+                maskTracks.add(new MaskTrack("genome repeat", GENOME_REPEAT, search.genome));
+            }
+            maskTracks.add(new MaskTrack("low complexity", LOW_COMPLEXITY, search.lowComplexity));
+        }
 
         for (int k = 0; k < tubes.size(); k++) {
             for (Pair pcr : tubes.get(k)) {
@@ -152,8 +195,8 @@ public class PanelPlot {
                 t.mark = String.valueOf(n);
             }
             t.fullName = names.target(k / 2);
-            int design =(merged != null && k < merged.length && merged[k] < 0) ? -merged[k] - 1 : k / 2;
-            t.widened = (widened != null && design < widened.length) ? widened[design] : 0;
+            t.design = names.designOf(k / 2);
+            t.widened = (widened != null && t.design < widened.length) ? widened[t.design] : 0;
             t.coverage = (t.end > t.start) ? CoverageReport.overlap(covered, t.start, t.end) / (double) (t.end - t.start) : 1;
             targets.add(t);
         }
@@ -179,10 +222,12 @@ public class PanelPlot {
      * amplicon shows its details.
      */
     public String svg() {
-        // Stretches of sequence drawn to scale: targets and amplicons with some context
+        // Stretches of sequence drawn to scale: targets and amplicons with some context,
+        // and a target not covered in full with the flanks its primers could lie in
         List<int[]> raw = new ArrayList<>();
         for (Target t : targets) {
-            raw.add(new int[]{Math.max(0, t.start - TARGET_PAD), Math.min(seqLen, t.end + TARGET_PAD)});
+            int pad = (t.coverage < 1) ? Math.max(TARGET_PAD, flank) : TARGET_PAD;
+            raw.add(new int[]{Math.max(0, t.start - pad), Math.min(seqLen, t.end + pad)});
         }
         for (Amp a : amps) {
             raw.add(new int[]{Math.max(0, a.start() - AMPLICON_PAD), Math.min(seqLen, a.end() + AMPLICON_PAD)});
@@ -250,12 +295,20 @@ public class PanelPlot {
 
         // Vertical layout of each row
         double[] rowY = new double[rows];
+        double[] maskY = new double[rows];
+        double[] siteY = new double[rows];
         double[][] tubeY = new double[rows][ntubes + 1];
         double[] noteY = new double[rows];
-        double y = HEADER_H;
+        double y = HEADER_H + (search == null ? 0 : LEGEND2_H);
         for (int r = 0; r < rows; r++) {
             rowY[r] = y;
             double ty = y + LABELS_H + TARGET_H + 6;
+            if (search != null) {
+                maskY[r] = ty - 2;
+                ty += maskTracks.size() * MASK_BAR + 6;
+                siteY[r] = ty - 2;
+                ty += 2 * SITE_H + 6;
+            }
             for (int t = 1; t <= ntubes; t++) {
                 tubeY[r][t] = ty;
                 ty += Math.max(1, laneEnds.get(r).get(t).size()) * LANE_H + 4;
@@ -277,6 +330,10 @@ public class PanelPlot {
         for (int r = 0; r < rows; r++) {
             double targetMid = rowY[r] + LABELS_H + TARGET_H / 2.0;
             text(s, 12, targetMid, "Targets", 12, MUTED, "start");
+            if (search != null) {
+                text(s, 12, maskY[r] + maskTracks.size() * MASK_BAR / 2.0, "Masked", 12, MUTED, "start");
+                text(s, 12, siteY[r] + SITE_H, "Candidates", 12, MUTED, "start");
+            }
             for (int t = 1; t <= ntubes; t++) {
                 text(s, 12, tubeY[r][t] + 5, tubeName(t), 12, MUTED, "start");
             }
@@ -329,6 +386,45 @@ public class PanelPlot {
                 if (cx - nw / 2 > m.get(2)[0]) {
                     text(s, cx, noteY[r], note, 10, (t.coverage > 0) ? "#ba7517" : UNCOVERED, "middle");
                     m.get(2)[0] = cx + nw / 2;
+                }
+            }
+        }
+
+        // Where primers cannot bind: one bar per reason, under the targets
+        for (int k = 0; k < maskTracks.size(); k++) {
+            MaskTrack m = maskTracks.get(k);
+            for (int[] v : m.stretches) {
+                for (int i = stretchOf(st, v[0]); i < ns && st.get(i)[0] < v[1]; i++) {
+                    int lo = Math.max(v[0], st.get(i)[0]);
+                    int hi = Math.min(v[1], st.get(i)[1]);
+                    if (hi <= lo) {
+                        continue;
+                    }
+                    double x1 = LEFT + sx[i] + (lo - st.get(i)[0]) * scale;
+                    double w = Math.max(1, (hi - lo) * scale);
+                    double my = maskY[srow[i]] + k * MASK_BAR;
+                    s.append("<rect x=\"").append(f(x1)).append("\" y=\"").append(f(my)).append("\" width=\"").append(f(w))
+                            .append("\" height=\"").append(MASK_BAR - 1).append("\" fill=\"").append(m.colour).append("\"><title>")
+                            .append(esc("Masked, " + m.name + ": " + (v[0] + 1) + "-" + v[1] + ", " + (v[1] - v[0]) + " bp"))
+                            .append("</title></rect>\n");
+                }
+            }
+        }
+
+        // Candidate primers: forward ones pointing right on the upper line, reverse ones pointing left below
+        if (search != null) {
+            for (PrimerDesign.Site c : search.sites) {
+                for (int i = stretchOf(st, c.start); i < ns && st.get(i)[0] < c.end; i++) {
+                    int lo = Math.max(c.start, st.get(i)[0]);
+                    int hi = Math.min(c.end, st.get(i)[1]);
+                    if (hi <= lo) {
+                        continue;
+                    }
+                    double x1 = LEFT + sx[i] + (lo - st.get(i)[0]) * scale;
+                    double x2 = LEFT + sx[i] + (hi - st.get(i)[0]) * scale;
+                    double cy = siteY[srow[i]] + (c.forward ? 0 : SITE_H);
+                    s.append("<polygon points=\"").append(arrow(x1, x2, cy, SITE_H - 1, c.forward)).append("\" fill=\"").append(CANDIDATE)
+                            .append("\"><title>").append(esc(siteTip(c))).append("</title></polygon>\n");
                 }
             }
         }
@@ -399,6 +495,46 @@ public class PanelPlot {
             x = legend(s, x, y, COVERED, "promoter", true);
         }
         text(s, x + 10, y, "Dark ends of an amplicon: its primers", 11, MUTED, "start");
+
+        if (search != null) {
+            y += LEGEND2_H;
+            String lead = "Masked, no primer binds:";
+            text(s, 12, y, lead, 11, MUTED, "start");
+            x = 12 + lead.length() * 6.0 + 8;
+            for (MaskTrack m : maskTracks) {
+                x = legend(s, x, y, m.colour, m.name, false);
+            }
+            x += 14;
+            s.append("<polygon points=\"").append(arrow(x, x + 12, y - 6, 5, true)).append("\" fill=\"").append(CANDIDATE).append("\"/>\n");
+            s.append("<polygon points=\"").append(arrow(x, x + 12, y + 1, 5, false)).append("\" fill=\"").append(CANDIDATE).append("\"/>\n");
+            String candidates = "candidate primers, forward and reverse";
+            text(s, x + 16, y, candidates, 11, MUTED, "start");
+            x += 16 + candidates.length() * 6.0 + 14;
+            if (flank > 0) {
+                text(s, x + 10, y, "Targets not covered in full: " + flank + " bp shown on each side", 11, MUTED, "start");
+            }
+        }
+    }
+
+    /** An arrow over x1..x2, pointing right for a forward primer and left for a reverse one. */
+    private static String arrow(double x1, double x2, double y, double h, boolean right) {
+        double w = Math.max(2, x2 - x1);
+        double head = Math.min(3, w);
+        double mid = y + h / 2;
+        if (right) {
+            double xe = x1 + w;
+            return f(x1) + "," + f(y) + " " + f(xe - head) + "," + f(y) + " " + f(xe) + "," + f(mid) + " "
+                    + f(xe - head) + "," + f(y + h) + " " + f(x1) + "," + f(y + h);
+        }
+        double xs = x2 - w;
+        return f(x2) + "," + f(y) + " " + f(xs + head) + "," + f(y) + " " + f(xs) + "," + f(mid) + " "
+                + f(xs + head) + "," + f(y + h) + " " + f(x2) + "," + f(y + h);
+    }
+
+    private String siteTip(PrimerDesign.Site c) {
+        return "Candidate " + (c.forward ? "forward" : "reverse") + " primer " + c.name + "\n"
+                + (c.start + 1) + "-" + c.end + ", " + (c.end - c.start) + " nt, Tm " + String.format(Locale.ROOT, "%.1f", c.tm) + " °C\n"
+                + "for " + names.design(c.region);
     }
 
     private double legend(StringBuilder s, double x, double y, String colour, String label, boolean outlined) {
@@ -425,6 +561,20 @@ public class PanelPlot {
         }
         if (t.widened > 0) {
             s.append("\nSearch flanks widened to ").append(t.widened).append(" bp");
+        }
+        if (t.coverage < 1 && flank > 0 && !maskTracks.isEmpty()) {
+            int lo = Math.max(0, t.start - flank);
+            int hi = Math.min(seqLen, t.end + flank);
+            List<String> shares = new ArrayList<>();
+            for (MaskTrack m : maskTracks) {
+                shares.add(m.name + " " + pct(CoverageReport.overlap(m.stretches, lo, hi) / (double) (hi - lo)));
+            }
+            s.append("\nMasked where its primers can lie (").append(lo + 1).append('-').append(hi).append("): ")
+                    .append(String.join(", ", shares));
+        }
+        String why = (t.coverage < 1 && search != null) ? search.pairing(t.design) : null;
+        if (why != null) {
+            s.append("\nNo primer pair: ").append(why);
         }
         return s.toString();
     }

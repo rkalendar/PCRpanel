@@ -45,6 +45,11 @@ public class RegionNames {
         return (info != null && k >= 0 && k < info.size()) ? info.get(k) : null;
     }
 
+    /** The design region (0-based) that target {@code k} was merged into, or {@code k} itself. */
+    public int designOf(int k) {
+        return (merged != null && 2 * k < merged.length && merged[2 * k] < 0) ? -merged[2 * k] - 1 : k;
+    }
+
     /** Target {@code k} (0-based) on its own, e.g. "COL4A5 exon 6 (region 12)". */
     public String target(int k) {
         ExonPromoterExtractor.Region r = annotation(k);

@@ -495,6 +495,7 @@ public class apanel {
         List<Pair> alternatives = new ArrayList<>();
         List<int[]> targets = new ArrayList<>();
         List<RegionNames> names = new ArrayList<>();
+        List<PrimerDesign.SearchMap> searches = new ArrayList<>();
         for (int s = 0; s < designs.size(); s++) {
             MultiplexTarget t = designs.get(s);
             for (Pair p : t.pcrcol) {
@@ -507,9 +508,11 @@ public class apanel {
             alternatives.addAll(t.allPairs);
             targets.add(t.cexons);
             names.add(new RegionNames(t.exons, t.regions));
+            searches.add(t.search);
         }
         PanelsCollector panels = new PanelsCollector(pcrcol, alternatives);
         panels.setRegionNames(names);
+        panels.setSearchMaps(searches);
         panels.CombinePairsPanel(targets, 2);
 
         // Phase 4: reports, file by file
@@ -752,6 +755,7 @@ public class apanel {
         PrimersCollector[] fPrimersList;
         PrimersCollector[] rPrimersList;
         int[] widened;
+        PrimerDesign.SearchMap search; // what the primer search found, for the panel map
         List<Pair> pcrcol;
         List<Pair> allPairs;
         StringBuilder sr; // primer list report, its header written at design time
@@ -806,6 +810,7 @@ public class apanel {
         t.fPrimersList = pd.getForwardPrimers();
         t.rPrimersList = pd.getReversePrimers();
         t.widened = pd.getWidenedFlanks();
+        t.search = pd.getSearchMap();
 
         long duration = (System.nanoTime() - startTime) / 1000000000;
         System.out.println("Time taken: " + duration + " seconds\n\n");
@@ -946,7 +951,7 @@ public class apanel {
                 }
             }
 
-            PanelPlot plot = new PanelPlot(t.name, seq.length(), cexons, exons, t.regions, t.widened, pcrpanels, true);
+            PanelPlot plot = new PanelPlot(t.name, seq.length(), cexons, exons, t.regions, t.widened, pcrpanels, true, t.search, maxpcr);
             if (!pcrcol.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
@@ -1173,6 +1178,7 @@ public class apanel {
             RegionNames names = new RegionNames(exons, regions);
             PanelsCollector panels = new PanelsCollector(pcrcol, pd.getAllPairs());
             panels.setRegionNames(List.of(names));
+            panels.setSearchMaps(List.of(pd.getSearchMap()));
             panels.CombinePairsPanel(cexons, 1);
             List<Pair> pcrpanel = panels.getPanel1();
 
@@ -1274,7 +1280,7 @@ public class apanel {
                 }
             }
 */
-            PanelPlot plot = new PanelPlot(name, seq.length(), cexons, exons, regions, pd.getWidenedFlanks(), List.of(pcrpanel), false);
+            PanelPlot plot = new PanelPlot(name, seq.length(), cexons, exons, regions, pd.getWidenedFlanks(), List.of(pcrpanel), false, pd.getSearchMap(), maxpcr);
             if (!pcrcol.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);

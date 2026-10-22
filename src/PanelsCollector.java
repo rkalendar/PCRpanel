@@ -22,6 +22,7 @@ public class PanelsCollector {
     private List<Pair> forced = new ArrayList<>();      // pairs placed despite a conflict
     private Map<Integer, List<Integer>> noPairs = new HashMap<>(); // per sequence: targets (1-based) that no candidate pair reaches
     private List<RegionNames> names = new ArrayList<>(); // per sequence: names of its regions in the notes
+    private List<PrimerDesign.SearchMap> searches = new ArrayList<>(); // per sequence: why a region got no primer pair
 
     /**
      *
@@ -99,6 +100,30 @@ public class PanelsCollector {
 
     private RegionNames namesOf(int seq) {
         return (seq < names.size() && names.get(seq) != null) ? names.get(seq) : new RegionNames(null, null);
+    }
+
+    /**
+     * What the primer search found for each target sequence (index =
+     * Pair.seq), so that the notes say why a region got no primer pair.
+     */
+    public void setSearchMaps(List<PrimerDesign.SearchMap> searches) {
+        this.searches = searches;
+    }
+
+    /**
+     * A target (0-based) that no candidate pair reaches, and why: the reason
+     * its design region got no primer pair.
+     */
+    private String noPairLine(int seq, int k) {
+        RegionNames rn = namesOf(seq);
+        int design = rn.designOf(k);
+        String line = rn.target(k) + ((design != k) ? ", designed with region " + (design + 1) : "");
+        PrimerDesign.SearchMap search = (seq < searches.size()) ? searches.get(seq) : null;
+        if (search == null) {
+            return line;
+        }
+        String why = search.pairing(design);
+        return line + ": " + ((why != null) ? why : "its design region has primer pairs, but none reaches this target");
     }
 
     public void CombinePairsPanel(int[] targets, int npools) {
@@ -587,14 +612,10 @@ public class PanelsCollector {
             }
         }
         if (!seqNoPairs.isEmpty()) {
-            s.append("Regions without any candidate primer pair at the current settings: ");
-            for (int i = 0; i < seqNoPairs.size(); i++) {
-                if (i > 0) {
-                    s.append(", ");
-                }
-                s.append(namesOf(seq).target(seqNoPairs.get(i) - 1));
+            s.append("Regions without any candidate primer pair at the current settings:\n");
+            for (int n : seqNoPairs) {
+                s.append(noPairLine(seq, n - 1)).append("\n");
             }
-            s.append("\n");
         }
         return s.toString();
     }
