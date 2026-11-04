@@ -202,7 +202,7 @@ public class PanelsCollector {
                 n++;
                 int r = 0;
                 for (Pair pcr : candidates) {
-                    if (pcr.seq == s && pcr.fx5 < t[1] && pcr.rx5 + 1 > t[0]) {
+                    if (pcr.seq == s && pcr.fx5 + pcr.fln < t[1] && pcr.rx5 + 1 - pcr.rln > t[0]) {
                         r++;
                     }
                 }
@@ -533,14 +533,14 @@ public class PanelsCollector {
 
     /**
      * Uncovered bases of target {@code t} ({seq, start, end}) that the pair
-     * would cover.
+     * would read.
      */
     private static int gain(Pair pcr, int[] t, List<int[]> covered) {
         if (pcr.seq != t[0]) {
             return 0;
         }
-        int lo = Math.max(t[1], pcr.fx5);
-        int hi = Math.min(t[2], pcr.rx5 + 1);
+        int lo = Math.max(t[1], pcr.fx5 + pcr.fln);
+        int hi = Math.min(t[2], pcr.rx5 + 1 - pcr.rln);
         if (hi <= lo) {
             return 0;
         }
@@ -552,7 +552,7 @@ public class PanelsCollector {
         for (List<Pair> pool : pools) {
             for (Pair q : pool) {
                 if (q.seq == seq) {
-                    iv.add(CoverageReport.interval(q.fx5, 1 + q.rx5));
+                    iv.add(CoverageReport.insert(q));
                 }
             }
         }

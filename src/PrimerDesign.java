@@ -361,6 +361,27 @@ public class PrimerDesign {
                 }
             }
 
+            // ── Tiling ───────────────────────────────────────────────────
+            // Primers in the flanks may not do: a pair has to span a region shorter
+            // than minPCR, or neighbouring exons merged into one region, in a single
+            // amplicon. Failing that, search inside the region as well, up to as far
+            // from it as maxPCR allows, and let overlapping amplicons read it in parts.
+            covered = candidateCoverage(taskIndex, targets, minPcrProduct, maxPcrProduct);
+            if (covered < targetLength(targets)) {
+                PrimersCollector flankForward = forwardPrimers[taskIndex];
+                PrimersCollector flankReverse = reversePrimers[taskIndex];
+                int reach = maxPcrProduct - minPrimerLength;
+                designRegionPrimers(taskIndex, exonStart, exonEnd, 0, reach, antisenseSeq, senseMask, homologyMask, antisenseMask, homologyMaskReverse, forwardTail, reverseTail, required5PrimeEnd, required3PrimeEnd, primerOverlap);
+                forwardPrimers[taskIndex].setTiled(true);
+                reversePrimers[taskIndex].setTiled(true);
+                if (candidateCoverage(taskIndex, targets, minPcrProduct, maxPcrProduct) > covered) {
+                    widenedFlanks[taskIndex] = reach;
+                } else {
+                    forwardPrimers[taskIndex] = flankForward;
+                    reversePrimers[taskIndex] = flankReverse;
+                }
+            }
+
             addSites(taskIndex);
             search.pairing.add(pairingNote(taskIndex, exonStart, exonEnd, minPcrProduct, maxPcrProduct));
 
@@ -474,7 +495,7 @@ public class PrimerDesign {
         }
         int exon1 = exonStart;
         int exon2 = exonEnd;
-        if (exon2 - exon1 < minPcr) { // a short region needs an amplicon spanning it
+        if (!fp.isTiled() && exon2 - exon1 < minPcr) { // a short region needs an amplicon spanning it
             exon1 = exonEnd;
             exon2 = exonStart;
         }
@@ -527,7 +548,7 @@ public class PrimerDesign {
     private int candidateCoverage(int taskIndex, List<int[]> targets, int minPcrProduct, int maxPcrProduct) {
         List<int[]> amplicons = new ArrayList<>();
         for (Pair p : PCRcollector.pairAllPrimers(forwardPrimers[taskIndex], reversePrimers[taskIndex], minPcrProduct, maxPcrProduct)) {
-            amplicons.add(CoverageReport.interval(p.fx5, 1 + p.rx5));
+            amplicons.add(CoverageReport.insert(p));
         }
         List<int[]> merged = CoverageReport.merge(amplicons);
         int n = 0;
@@ -811,7 +832,7 @@ public class PrimerDesign {
      * Checks whether the primer contains any disqualifying simple-sequence
      * repeats.
      */
-    private static boolean containsSSR(String primer) {
+    static boolean containsSSR(String primer) {
         for (String pattern : SSR_PATTERNS) {
             if (primer.contains(pattern)) {
                 return true;

@@ -26,6 +26,7 @@ public class apanel {
         int maxLen = 25;
         int prLap = 12;   // 0-18
         int minLc = 75;
+        int separatePcr = 0;  // largest amplicon of a separate PCR; 0 = 1.5 x maxPcr
         String e5 = "n";
         String e3 = "w";
         String fTail = "";
@@ -333,6 +334,9 @@ public class apanel {
                 if ((v = parseIntParam(line, "maxpcr=")) != null) {
                     cfg.maxPcr = clamp(v, 30, 50000);
                 }
+                if ((v = parseIntParam(line, "separatepcr=")) != null) {
+                    cfg.separatePcr = clamp(v, 30, 50000);
+                }
                 if ((v = parseIntParam(line, "minlen=")) != null) {
                     cfg.minLen = clamp(v, 12, 80);
                 }
@@ -424,7 +428,7 @@ public class apanel {
                             refsequence, ref, cfg.homology, primers, exons,
                             cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                             cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                            cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, null);
+                            cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, null, separateSettings(cfg));
                 }
                 continue;
             }
@@ -436,7 +440,7 @@ public class apanel {
                     refsequence, ref, cfg.homology, primers, exons,
                     cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                     cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, regs);
+                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, regs, separateSettings(cfg));
         }
     }
 
@@ -517,7 +521,7 @@ public class apanel {
 
         // Phase 4: reports, file by file
         for (int s = 0; s < designs.size(); s++) {
-            reportMultiplexTarget(designs.get(s), s, panels, cfg.outPath, cfg.maxPcr);
+            reportMultiplexTarget(designs.get(s), s, panels, cfg.outPath, cfg.maxPcr, separateSettings(cfg));
         }
     }
 
@@ -620,6 +624,8 @@ public class apanel {
         h.append("AMPLICON SIZE (bp)").append(nl);
         h.append(helpRow("minPCR=INT",          "Min amplicon size. Default 60.  Range 30-5000."));
         h.append(helpRow("maxPCR=INT",          "Max amplicon size. Default 600. Range 30-50000."));
+        h.append(helpRow("separatePCR=INT",     "Max amplicon size of the separate PCRs for regions"));
+        h.append(helpRow("",                    "the panel leaves uncovered. Default 1.5 x maxPCR."));
         h.append(nl);
 
         h.append("PRIMER CONSTRAINTS").append(nl);
@@ -821,10 +827,11 @@ public class apanel {
      * Writes the reports of target {@code s}, whose amplicons the shared
      * {@code panels} carry.
      *
-     * @param maxpcr maximum amplicon size, also the flank written around the
-     *               regions left uncovered
+     * @param maxpcr   maximum amplicon size, also the flank written around the
+     *                 regions left uncovered
+     * @param separate the settings of the separate PCRs for those regions
      */
-    private static void reportMultiplexTarget(MultiplexTarget t, int s, PanelsCollector panels, String outpath, int maxpcr) {
+    private static void reportMultiplexTarget(MultiplexTarget t, int s, PanelsCollector panels, String outpath, int maxpcr, SeparatePcr.Settings separate) {
         String tagfile = t.tagfile;
         String seq = t.seq;
         int[] exons = t.exons;
@@ -871,7 +878,7 @@ public class apanel {
                 if (!pcrpanels.get(k).isEmpty()) {
                     List<int[]> iv = new ArrayList<>();
                     for (Pair pcrx : pcrpanels.get(k)) {
-                        iv.add(CoverageReport.interval(pcrx.fx5, 1 + pcrx.rx5));
+                        iv.add(CoverageReport.insert(pcrx));
                     }
                     cov.addPool("Panel" + (k + 1), iv);
                 }
@@ -960,10 +967,29 @@ public class apanel {
                 writePlot(outDir, stem, plot);
             }
             writeUncovered(outDir, stem, plot.uncoveredFasta(seq, maxpcr));
+            writeSeparate(outDir, stem, new SeparatePcr(t.name, seq, t.search, separate).report(plot.uncovered()));
 
         } catch (IOException e) {
             System.out.println("Incorrect file name.\n");
         }
+    }
+
+    private static SeparatePcr.Settings separateSettings(PrimerConfig cfg) {
+        return new SeparatePcr.Settings(cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen, cfg.minTm, cfg.maxTm, cfg.minLc,
+                cfg.separatePcr, cfg.e5, cfg.e3, cfg.fTail, cfg.rTail);
+    }
+
+    /**
+     * Writes the primer pairs for separate PCR of the regions left uncovered;
+     * nothing when every target is covered in full.
+     */
+    private static void writeSeparate(Path outDir, String stem, String report) throws IOException {
+        if (report.isEmpty()) {
+            return;
+        }
+        Path file = outDir.resolve(stem + "_separate_pcr.txt");
+        System.out.println("Saving the primer pairs for separate PCR to a file: " + file);
+        Files.writeString(file, report);
     }
 
     /**
@@ -1118,7 +1144,7 @@ public class apanel {
     /**
      * @param regions annotation of the exon pairs, for the panel map; null for FASTA
      */
-    private static void RunSingleplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3, List<ExonPromoterExtractor.Region> regions) throws IOException {
+    private static void RunSingleplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3, List<ExonPromoterExtractor.Region> regions, SeparatePcr.Settings separate) throws IOException {
         Path in = Paths.get(tagfile);
         String stem = fileStem(in);
         //String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
@@ -1211,7 +1237,7 @@ public class apanel {
                 CoverageReport cov = new CoverageReport(cexons, regions);
                 List<int[]> iv = new ArrayList<>();
                 for (Pair pcrx : pcrpanel) {
-                    iv.add(CoverageReport.interval(pcrx.fx5, 1 + pcrx.rx5));
+                    iv.add(CoverageReport.insert(pcrx));
                 }
                 cov.addPool("Panel", iv);
                 String covtxt = cov.render();
@@ -1289,6 +1315,7 @@ public class apanel {
                 writePlot(outDir, stem, plot);
             }
             writeUncovered(outDir, stem, plot.uncoveredFasta(seq, maxpcr));
+            writeSeparate(outDir, stem, new SeparatePcr(name, seq, pd.getSearchMap(), separate).report(plot.uncovered()));
 
         } catch (IOException e) {
             System.out.println("Incorrect file name.\n");

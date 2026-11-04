@@ -12,7 +12,8 @@ import java.util.Map;
  * skipped. This class measures, base by base, how much of the annotated target
  * each pool actually covers, and how much the pools cover together, so that any
  * gap left by the design is visible in the output rather than having to be
- * reconstructed from the amplicon coordinates afterwards.
+ * reconstructed from the amplicon coordinates afterwards. Covered means read:
+ * see {@link #insert}.
  *
  * Coordinates are half-open [start, end) on the target sequence, matching the
  * primer coordinates used elsewhere in the tool.
@@ -138,7 +139,8 @@ public class CoverageReport {
 
         s.append("\n\nTarget coverage report\n");
         s.append("Annotated target: ").append(regions.size()).append(" region(s), ")
-                .append(targetBp).append(" bp\n\n");
+                .append(targetBp).append(" bp\n");
+        s.append("Covered means read: the bases between the primers of an amplicon, not those under them.\n\n");
         s.append("Pool\tAmplicons\tTarget bp covered\tCoverage\tRegions full\tPartial\tUncovered\n");
 
         List<int[]> all = new ArrayList<>();
@@ -168,7 +170,7 @@ public class CoverageReport {
         } else {
             s.append("\nRegions not covered in full: ").append(nGaps).append(" of ")
                     .append(regions.size()).append(", leaving ").append(gapBp)
-                    .append(" bp of the target without an amplicon.\n");
+                    .append(" bp of the target unread.\n");
             s.append("Region\tTarget\tPosition\tCoverage\n").append(gaps);
             s.append("\nA region is left uncovered when no primer pair satisfying the current length, Tm,\n");
             s.append("complexity and masking constraints could be placed around it. To close such gaps,\n");
@@ -200,8 +202,13 @@ public class CoverageReport {
                 + pct(covered, targetBp) + "\t" + full + "\t" + partial + "\t" + none + "\n";
     }
 
-    /** Convenience: amplicon interval from a designed pair. */
-    public static int[] interval(int start, int end) {
-        return new int[]{Math.min(start, end), Math.max(start, end)};
+    /**
+     * What an amplicon reads: the bases between its primers, half-open. Reads
+     * start with the primer's own sequence rather than the sample's, so the
+     * bases under a primer do not count as covered.
+     */
+    public static int[] insert(Pair p) {
+        int lo = p.fx5 + p.fln;
+        return new int[]{lo, Math.max(lo, p.rx5 + 1 - p.rln)};
     }
 }

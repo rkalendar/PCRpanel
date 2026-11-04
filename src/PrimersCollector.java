@@ -12,9 +12,18 @@ public class PrimersCollector {
     private int x1t; // task x1 coordinate
     private int x2t;       // task end coordinate
     private int n;         // number of entrance
+    private boolean tiled; // amplicons may overlap the task region instead of spanning it
 
     public int Amount() {
         return n;
+    }
+
+    public boolean isTiled() {
+        return tiled;
+    }
+
+    public void setTiled(boolean t) {
+        tiled = t;
     }
 
     public String[] getPrimer() {

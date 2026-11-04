@@ -70,6 +70,22 @@ public class PanelPlot {
         double coverage;
     }
 
+    /** A target not covered in full. */
+    public static final class Uncovered {
+
+        public final String name;         // e.g. "COL4A5 exon 4 (region 10)"
+        public final double coverage;
+        public final List<int[]> gaps;    // the stretches no amplicon covers, 0-based half-open
+        public final String why;          // why its design region got no primer pair, or null
+
+        Uncovered(String name, double coverage, List<int[]> gaps, String why) {
+            this.name = name;
+            this.coverage = coverage;
+            this.gaps = gaps;
+            this.why = why;
+        }
+    }
+
     /** Stretches where primers cannot bind for one reason: one bar of the Masked row. */
     private static final class MaskTrack {
 
@@ -110,7 +126,7 @@ public class PanelPlot {
     private final int ntubes;
     private final List<Target> targets = new ArrayList<>();
     private final List<Amp> amps = new ArrayList<>();
-    private final List<int[]> covered;  // the amplicons merged, 0-based half-open
+    private final List<int[]> covered;  // what the amplicons read, merged, 0-based half-open
     private final RegionNames names;
     private final List<MaskTrack> maskTracks = new ArrayList<>(); // empty: no Masked row
     private final PrimerDesign.SearchMap search; // null: no Masked and Candidates rows
@@ -163,7 +179,7 @@ public class PanelPlot {
 
         List<int[]> iv = new ArrayList<>();
         for (Amp a : amps) {
-            iv.add(new int[]{a.start(), a.end()});
+            iv.add(CoverageReport.insert(a.pcr));
         }
         covered = CoverageReport.merge(iv);
 
@@ -721,23 +737,7 @@ public class PanelPlot {
             if (t.coverage >= 1) {
                 continue;
             }
-            List<int[]> gaps = new ArrayList<>(); // 0-based half-open
-            int pos = t.start;
-            for (int[] c : covered) {
-                if (c[1] <= pos) {
-                    continue;
-                }
-                if (c[0] >= t.end) {
-                    break;
-                }
-                if (c[0] > pos) {
-                    gaps.add(new int[]{pos, c[0]});
-                }
-                pos = Math.max(pos, c[1]);
-            }
-            if (pos < t.end) {
-                gaps.add(new int[]{pos, t.end});
-            }
+            List<int[]> gaps = gaps(t);
 
             // stretches whose flanks would overlap share one fragment
             List<List<int[]>> groups = new ArrayList<>();
@@ -781,6 +781,39 @@ public class PanelPlot {
             }
         }
         return s.toString();
+    }
+
+    /** The stretches of a target that no amplicon covers, 0-based half-open. */
+    private List<int[]> gaps(Target t) {
+        List<int[]> gaps = new ArrayList<>();
+        int pos = t.start;
+        for (int[] c : covered) {
+            if (c[1] <= pos) {
+                continue;
+            }
+            if (c[0] >= t.end) {
+                break;
+            }
+            if (c[0] > pos) {
+                gaps.add(new int[]{pos, c[0]});
+            }
+            pos = Math.max(pos, c[1]);
+        }
+        if (pos < t.end) {
+            gaps.add(new int[]{pos, t.end});
+        }
+        return gaps;
+    }
+
+    /** The targets not covered in full, in order along the sequence. */
+    public List<Uncovered> uncovered() {
+        List<Uncovered> out = new ArrayList<>();
+        for (Target t : targets) {
+            if (t.coverage < 1) {
+                out.add(new Uncovered(t.fullName, t.coverage, gaps(t), (search != null) ? search.pairing(t.design) : null));
+            }
+        }
+        return out;
     }
 
     /** The part of a primer that binds the target: its 3' end, after the tail. */

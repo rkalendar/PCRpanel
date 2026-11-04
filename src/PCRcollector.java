@@ -72,7 +72,7 @@ public class PCRcollector {
         int exonid = (fp.getTaskId() - 1);
         int exon1 = fp.getTaskX1();
         int exon2 = fp.getTaskX2();
-        if (exon2 - exon1 < minpcr) {
+        if (!fp.isTiled() && exon2 - exon1 < minpcr) {
             exon1 = fp.getTaskX2();
             exon2 = fp.getTaskX1();
         }
@@ -99,7 +99,7 @@ public class PCRcollector {
     /**
      * Candidate pairs of one region: each forward primer takes the nearest unused
      * reverse primer that gives an amplicon of minpcr..maxpcr overlapping the
-     * region (spanning it, for a region shorter than minpcr).
+     * region (spanning it, for a region shorter than minpcr that is not tiled).
      *
      * Primers of other regions are deliberately not checked here. Checking every
      * region against all candidates of the regions before it starved the later
@@ -114,7 +114,7 @@ public class PCRcollector {
         int exonid = (fp.getTaskId() - 1);
         int exon1 = fp.getTaskX1();          // exon x1
         int exon2 = fp.getTaskX2();          // exon x2
-        if (exon2 - exon1 < minpcr) {
+        if (!fp.isTiled() && exon2 - exon1 < minpcr) {
             exon1 = fp.getTaskX2();
             exon2 = fp.getTaskX1();
         }
