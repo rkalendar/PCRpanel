@@ -52,6 +52,7 @@
 | **Multiplex tiling PCR** | Designs two overlapping pools of amplicons for complete, gap-free target coverage |
 | **No drop-outs** | Regions with the fewest primer options are placed first, and amplicons that conflict with both pools go to extra tubes instead of being dropped |
 | **Panel map & BED tracks** | An SVG map of each panel, BED tracks for genome browsers and primer-trimming tools, and a FASTA file of the regions left uncovered |
+| **Separate PCR** | Primer pairs for the regions the panel leaves uncovered, each to be amplified on its own |
 | **Single-plex mode** | Non-multiplexed primer design for simpler workflows |
 | **Any-scale input** | Works with sequences of any length and any number of targets |
 | **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
@@ -301,6 +302,7 @@ All parameters are specified in a plain-text configuration file. Lines beginning
 |---|---|---|
 | `minPCR` | Minimum amplicon size (bp) | `250` |
 | `maxPCR` | Maximum amplicon size (bp) | `500` |
+| `separatePCR` | Maximum amplicon size (bp) of the [separate PCRs](#separate-pcr-for-uncovered-regions) | 1.5 × `maxPCR` |
 | `minLen` | Minimum primer length (nt) | `18` |
 | `maxLen` | Maximum primer length (nt) | `24` |
 | `minTm` | Minimum melting temperature (°C) | `60` |
@@ -698,7 +700,7 @@ PCRpanel uses a multi-stage filtering pipeline to select optimal primers for eac
 
 For every target region, PCRpanel generates all possible forward and reverse primers within the allowed length range (`minLen`–`maxLen`). Candidates are drawn from the flanking sequence upstream and downstream of each target, up to `minPCR` bp (at most 500 bp) beyond its ends. Targets less than `minPCR` apart, or that fit together within `maxPCR`, are merged into one design region.
 
-When the primers found in these flanks cannot cover a region — no primer pair at all, or a region edge out of reach — the search is repeated with the flanks widened as far as `maxPCR` allows. The primer report marks such regions `search flanks widened to N bp`.
+When the primers found in these flanks cannot cover a region — no primer pair at all, or a region edge out of reach — the search is repeated with the flanks widened as far as `maxPCR` allows. If that is not enough either, primers are also searched inside the region, and overlapping amplicons read it in parts. This closes a target shorter than `minPCR`, or neighbouring exons merged into one region, that no single amplicon can span. The primer report marks such regions `search flanks widened to N bp`.
 
 ### Stage 2 — Thermodynamic Filtering
 
@@ -717,7 +719,7 @@ Each candidate is evaluated against thermodynamic criteria:
 
 ### Stage 4 — Amplicon Assembly & Pooling
 
-Passing primers are paired into amplicons that tile across the target region. Each forward primer is paired with the nearest reverse primer that gives an amplicon of `minPCR`–`maxPCR` bp overlapping the target (spanning it, for targets shorter than `minPCR`); every other valid forward/reverse combination is kept as an alternative for closing gaps.
+Passing primers are paired into amplicons that tile across the target region. Each forward primer is paired with the nearest reverse primer that gives an amplicon of `minPCR`–`maxPCR` bp overlapping the target (spanning it, for targets shorter than `minPCR`, unless overlapping amplicons have to read such a target in parts); every other valid forward/reverse combination is kept as an alternative for closing gaps. A primer inside a target hides a variant under it from its own amplicon; the amplicon overlapping it in another tube reads that base.
 
 The amplicons are then assembled so that **no target region is dropped while a primer pair for it exists**:
 
@@ -749,6 +751,7 @@ PCRpanel generates the following output for each target:
 | **Amplicon BED** (`*_amplicons.bed`) | Amplicons coloured by tube, for a genome browser such as IGV |
 | **Target BED** (`*_targets.bed`) | Target regions coloured by coverage, for a genome browser |
 | **Uncovered regions** (`*_uncovered.fasta`) | The parts of the targets left uncovered, with their flanking sequence, for designing their primers by other means — see [Regions Left Uncovered](#regions-left-uncovered); written only when some target is not covered in full |
+| **Separate PCR** (`*_separate_pcr.txt`) | Primer pairs for those parts, designed without regard to the panel, each to be amplified in a tube of its own — see [Separate PCR for Uncovered Regions](#separate-pcr-for-uncovered-regions); written only when some target is not covered in full |
 
 ### Region Names
 
@@ -785,7 +788,7 @@ The targets are listed in order, each under a heading with its [name](#region-na
 
 ```
 COL4A5 exon 4 (region 10): 128959-129003 45bp
-COL4A5 exons 5-6 (region 11): 133706-133898 193bp
+COL4A5 exons 5-6 (region 11): 133706-133898 193bp search flanks widened to 381 bp
 COL4A5 exon 6 (region 12): 133836-133898 (63bp) join with region 11
 ```
 
@@ -794,7 +797,7 @@ The heading of a design region spans all the targets merged into it. A heading m
 | Mark | Meaning |
 |---|---|
 | `join with region N` | The target was merged into design region N, whose primers cover it; no primers are listed under it |
-| `search flanks widened to N bp` | The default flanks could not cover the region, so its primers were searched up to N bp from it |
+| `search flanks widened to N bp` | The default flanks could not cover the region, so its primers were searched up to N bp from it, and inside it if needed |
 
 ### Interpreting the Panel Listing
 
@@ -818,26 +821,22 @@ COL4A5 exon 2 (region 8) PCR amplicon=247 bp Tm=77.3 CG%=36.8
 
 ### Interpreting the Panel Assembly Notes
 
-When assembling the panel took more than tiling the two pools, `*_panels.txt` contains a **Panel assembly** section just before the coverage report, also echoed to the console. For NG_011977.2 in multiplex with `minPCR=200`, `maxPCR=400`, `minTm=62`, `maxTm=63` and `3end=h`:
+When assembling the panel took more than tiling the two pools, `*_panels.txt` contains a **Panel assembly** section just before the coverage report, also echoed to the console. For COL4A3 (NG_011591) in multiplex with `minPCR=200`, `maxPCR=400`, `minTm=62`, `maxTm=63` and `3end=h`:
 
 ```
 Panel assembly
-Amplicons that conflict with both Panel1 and Panel2 are amplified in extra tubes, each free of conflicts, so that their regions are not dropped: Panel3 (10), Panel4 (3)
-The panel as a whole needs 4 tubes.
+Amplicons that conflict with both Panel1 and Panel2 are amplified in extra tubes, each free of conflicts, so that their regions are not dropped: Panel3 (19), Panel4 (4), Panel5 (1)
+The panel as a whole needs 5 tubes.
 Regions without any candidate primer pair at the current settings:
-COL4A5 exon 5 (region 11): no forward primer passes the filters (3 reverse)
-COL4A5 exon 6 (region 12), designed with region 11: no forward primer passes the filters (3 reverse)
-COL4A5 exon 10 (region 16): no forward or reverse primer passes the filters
-COL4A5 exon 20 (region 26): 1 forward and 3 reverse primers, but the shortest pair gives 454 bp, longer than maxPCR (400 bp)
-COL4A5 exon 24 (region 30): 3 forward and 5 reverse primers, but the shortest pair gives 428 bp, longer than maxPCR (400 bp)
-COL4A5 exon 40 (region 46): no reverse primer passes the filters (1 forward)
+COL4A3 exon 1 (region 1): no forward or reverse primer passes the filters
+COL4A3 exon 28 (region 38): no reverse primer passes the filters (2 forward)
 ```
 
 | Line | Meaning |
 |---|---|
 | **Extra tubes** | How many of this target's amplicons are in each extra tube. Each tube is a separate multiplex reaction — amplify every tube listed |
 | **The panel as a whole needs N tubes** | Total number of tubes, counting those opened for the other input files of the run, which share the tubes |
-| **Regions without any candidate primer pair** | One line per target for which no primer pair exists at the current settings even with widened search flanks: its [name](#region-names) with its number in the coverage report — and, for a target merged into another design region, that region — then why its design region got no pair (below) |
+| **Regions without any candidate primer pair** | One line per target that no primer pair can read at the current settings, even with widened search flanks and primers inside the target: its [name](#region-names) with its number in the coverage report — and, for a target merged into another design region, that region — then why its design region got no pair (below) |
 | **Amplicons placed despite a conflict** *(single-plex only)* | Amplicons included although their primers dimerise with another amplicon's primers, one per line: the design region, the tube, the two primers and the conflicting primers. They are also marked `FORCED (…)` in the [panel listing](#interpreting-the-panel-listing) |
 
 The reason applies the pairing rules of the design to the candidate primers of the region — those that passed every filter, shown in the Candidates row of the [panel map](#panel-map-and-bed-tracks) — and names the first rule that fails:
@@ -857,32 +856,36 @@ See also [Closing Coverage Gaps](#closing-coverage-gaps).
 Every panel report ends with a target-coverage summary, written to `*_panels.txt` and echoed to the
 console. Amplicon count is not a measure of coverage — amplicons overlap, and a region that no primer pair
 can reach is left uncovered — so the report measures coverage base by base against the annotated
-target:
+target. **Covered means read:** only the bases between the primers of an amplicon count, because a read
+starts with the primer's own sequence rather than the sample's, and primer-trimming tools remove it. A base
+under a primer of one amplicon counts only if another amplicon reads it. For COL4A3 with the settings above:
 
 ```
 Target coverage report
-Annotated target: 59 region(s), 9921 bp
+Annotated target: 66 region(s), 11552 bp
+Covered means read: the bases between the primers of an amplicon, not those under them.
 
 Pool    Amplicons  Target bp covered  Coverage  Regions full  Partial  Uncovered
-Panel1  42         5914               59.6%     26            16       17
-Panel2  33         5416               54.6%     17            18       24
-Panel3  7          1695               17.1%     5             3        51
-All pools combined 82  9604           96.8%     54            1        4
+Panel1  56         6704               58.0%     37            13       16
+Panel2  44         5358               46.4%     23            15       28
+Panel3  19         2960               25.6%     6             10       50
+Panel4  4          870                7.5%      0             3        63
+Panel5  1          292                2.5%      1             1        64
+All pools combined 124  10953         94.8%     62            2        2
 
-Regions not covered in full: 5 of 59, leaving 317 bp of the target without an amplicon.
+Regions not covered in full: 4 of 66, leaving 599 bp of the target unread.
 Region  Target          Position       Coverage
-10      COL4A5 exon 4   128959-129003  0.0%
-16      COL4A5 exon 10  140987-141049  0.0%
-17      COL4A5 exon 11  143029-143064  50.0%
-42      COL4A5 exon 36  191287-191426  0.0%
-46      COL4A5 exon 40  232210-232260  0.0%
+1       COL4A3 exon 1   1-249          0.0%
+14      COL4A3 exon 9   83879-83956    83.3%
+38      COL4A3 exon 28  112885-112989  0.0%
+66      COL4A3 exon 52  147222-150228  92.3%
 ```
 
 | Column | Meaning |
 |---|---|
 | **Pool** | Each tube separately — Panel1, Panel2, and any extra tubes — then all tubes together |
 | **Amplicons** | Primer pairs carried by that pool |
-| **Target bp covered** | Bases of the annotated target overlapped by that pool's amplicons, counted once |
+| **Target bp covered** | Bases of the annotated target read by that pool's amplicons, counted once |
 | **Coverage** | The same figure as a percentage of the whole target |
 | **Regions full / Partial / Uncovered** | Annotated regions covered completely, in part, and not at all |
 
@@ -896,8 +899,8 @@ red or amber on the [panel map](#panel-map-and-bed-tracks).
 A region is left uncovered when no primer pair satisfying the current constraints can be placed around it —
 most often because the flanking sequence is repetitive or of low complexity and has been masked. Primer
 conflicts alone never leave a region uncovered: before giving up on a region, PCRpanel widens its primer
-search flanks as far as `maxPCR` allows, and places any amplicon that conflicts with the rest of the panel
-in an extra tube. Regions for which no primer pair exists at all are listed in the
+search flanks as far as `maxPCR` allows, then searches inside the region and reads it with overlapping
+amplicons, and places any amplicon that conflicts with the rest of the panel in an extra tube. Regions for which no primer pair exists at all are listed in the
 [Panel assembly](#interpreting-the-panel-assembly-notes) section.
 
 The [panel map](#panel-map-and-bed-tracks) shows which of the causes applies: an uncovered target is drawn
@@ -935,7 +938,7 @@ catttttcagGGTGATGATGGAATTCCAGGGCCACCAGGACCAAAAGGAATCAGAgtaag
 …
 ```
 
-In the sequence, upper case marks the target bases that no amplicon covers, and lower case the flanks and the parts of the target already covered. Coordinates in the header are 1-based and inclusive, as in GenBank:
+In the sequence, upper case marks the target bases that no amplicon reads, and lower case the flanks and the parts of the target already read. Coordinates in the header are 1-based and inclusive, as in GenBank:
 
 | Header field | Meaning |
 |---|---|
@@ -943,15 +946,56 @@ In the sequence, upper case marks the target bases that no amplicon covers, and 
 | Name | The region as named in the reports, with its number in the coverage report |
 | `loc` | Record and coordinates of the fragment |
 | `target` | Coordinates of the whole target region |
-| `uncovered` | Its stretches that no amplicon covers, comma-separated |
+| `uncovered` | Its stretches that no amplicon reads, comma-separated |
 | `coverage` | Covered fraction of the target |
 | `strand` | Strand of the gene, when annotated. The fragment itself is always given on the strand of the record |
+
+### Separate PCR for Uncovered Regions
+
+When some targets are not covered in full, `*_separate_pcr.txt` proposes primer pairs for their uncovered parts, designed without regard to the panel. Amplify each amplicon in a tube of its own, at the annealing temperature of its pair, and do not add it to a panel tube: it has not been checked against the primers there. The file is not written when every target is covered in full. It opens with a table of the regions, with why the panel has no pair for each and the amplicons that take it over, followed by the amplicons:
+
+```
+Target	Uncovered	Panel coverage	Why the panel has no pair	Amplicons
+COL4A3 exon 1 (region 1)	1-249	0.0%	no forward or reverse primer passes the filters	1, in part
+COL4A3 exon 9 (region 14)	83879-83891	83.3%	its amplicons do not read this part	2
+COL4A3 exon 28 (region 38)	112885-112989	0.0%	no reverse primer passes the filters (2 forward)	3
+COL4A3 exon 52 (region 66)	149997-150228	92.3%	its amplicons do not read this part	4, 5, 6, in part
+…
+Amplicon 3: covers 112885-112989
+Filters relaxed: Tm 59-66 °C
+
+Best pair: 112829-113046, 218 bp, Tm difference 0.4 °C
+Name	Sequence	Binding_sequence	Length	Tm(°C)	GC(%)	Linguistic_Complexity(%)	Masked_bases
+NG_011591.1:F_112829-112852	acactctttccctacacgacgctcttccgatctaataagatgaaggaaagttgctga	aataagatgaaggaaagttgctga	24	59.1	33.3	85	0
+NG_011591.1:R_113046-113020	gtgactggagttcagacgtgtgctcttccgatcttgaacatcttctaaatatccacaacaa	tgaacatcttctaaatatccacaacaa	27	59.5	29.6	81	0
+Amplicon, the uncovered bases in upper case:
+aataagatgaaggaaagttgctgatgtggagatgcatatgtgtatttgtttctaagGTAT
+…
+```
+
+Each amplicon gives its best pair and up to two alternatives with other primers. `Sequence` carries the adapter tails of the panel, so that the amplicon can join the same library; `Binding_sequence`, present when tails are set, is the primer without them, for Sanger sequencing for example.
+
+A pair in its own tube has to get along with nothing but itself: its Tm need only match its partner's, and no other primer is checked. So the search starts from the filters of the panel and relaxes them step by step, each step keeping what the ones before it relaxed. `Filters relaxed` says how far an amplicon had to go:
+
+| Step | Filters | Tm difference within a pair |
+|---|---|---|
+| 1 | Those of the panel | Up to the width of the Tm window |
+| 2 | Tm window 3 °C wider on both sides | Up to 3 °C |
+| 3 | Primer length from `minLen` − 2 (at least 15) to `maxLen` + 4, any 3′ and 5′ end | Up to 3 °C |
+| 4 | Amplicons from `minPCR` (at most 100 bp) to `separatePCR` | Up to 3 °C |
+| 5 | Tm window 5 °C wider on both sides, `minLC` − 10, up to 5 masked bases, primers 10 bp from the region | Up to 4 °C |
+
+- **Fewer PCRs first.** One amplicon for a whole stretch, or for neighbouring stretches together, is preferred to several, because a wider Tm window costs a pair in its own tube nothing. Only a stretch that no pair of steps 1–4 can take whole is tiled by several amplicons. Step 5, whose primers are the most likely to bind elsewhere, comes last.
+- **Primers outside the region.** A primer lies at least 30 bp from what it has to amplify, so that those bases are read well clear of the primers' own sequence.
+- **Specificity.** Masked repeats are avoided as in the panel, and the last 8 bases of a primer are never masked. The 3′-terminal 15 bases of a primer must occur only once in the target sequence, on either strand. A primer can still bind elsewhere in the genome: without `genome_path` common repeats such as Alu are not recognised at all, so run with a genome reference, and check the pairs by alignment before ordering.
+
+In [homology mode](#panel-mode) these pairs are designed for the file they belong to, and are not consensus primers. A stretch for which no step gives a pair is listed at the end of the file; it is typically masked as a whole, or lies too close to the end of the sequence for a primer to fit beyond it.
 
 ### Panel Map and BED Tracks
 
 Each target also gets a panel map, `*_panel.svg`, which opens in any web browser:
 
-- The **Targets** row shows the target regions: grey when covered in full, amber when partly covered (the percentage is written below), red when no amplicon reaches them. Promoters are drawn outlined. Exons are numbered within their gene in transcription order, and the gene is named where its regions begin.
+- The **Targets** row shows the target regions: grey when covered in full, amber when partly covered (the percentage is written below), red when no amplicon reads them. Coverage counts the bases between the primers, as in the [coverage report](#interpreting-the-coverage-report). Promoters are drawn outlined. Exons are numbered within their gene in transcription order, and the gene is named where its regions begin.
 - The **Masked** row, under the targets, shows where no primer can bind, one thin bar per reason:
 
   | Bar | Reason |
@@ -967,11 +1011,11 @@ Each target also gets a panel map, `*_panel.svg`, which opens in any web browser
 - Hovering over a region shows its [name](#region-names) with its number in the coverage report, its coordinates, strand and coverage and, where it applies, the widened search flanks. For a target not covered in full it also shows how much of that stretch is masked, by reason, and why its design region got no primer pair. Hovering over an amplicon shows its tube, the design region it was designed for, as named in the panel listing, its coordinates, size and primers:
 
 ```
-COL4A5 exon 24 (region 30)
-162454-162645, 192 bp, + strand
+COL4A3 exon 28 (region 38)
+112885-112989, 105 bp, + strand
 Covered: 0.0% (no primer pair reaches it)
-Masked where its primers can lie (162054-163045): repeat 5.0%, low complexity 25.1%
-No primer pair: 3 forward and 5 reverse primers, but the shortest pair gives 428 bp, longer than maxPCR (400 bp)
+Masked where its primers can lie (112485-113389): repeat 48.0%, low complexity 14.1%
+No primer pair: no reverse primer passes the filters (2 forward)
 ```
 
   The last line gives the same reason as the [Panel assembly](#interpreting-the-panel-assembly-notes) section of the report, where the reasons are explained.
@@ -1183,7 +1227,7 @@ See [Memory Configuration](#memory-configuration) for genome-size-specific recom
 
 ### Primers not found for some targets
 
-The [Panel assembly](#interpreting-the-panel-assembly-notes) section lists the regions for which no primer pair exists at the current settings, each with the reason and what to change, and `*_uncovered.fasta` holds their sequence with flanks, ready for another design tool (see [Regions Left Uncovered](#regions-left-uncovered)). To recover them in PCRpanel:
+The [Panel assembly](#interpreting-the-panel-assembly-notes) section lists the regions for which no primer pair exists at the current settings, each with the reason and what to change, `*_separate_pcr.txt` offers primer pairs to amplify them on their own (see [Separate PCR for Uncovered Regions](#separate-pcr-for-uncovered-regions)), and `*_uncovered.fasta` holds their sequence with flanks, ready for another design tool (see [Regions Left Uncovered](#regions-left-uncovered)). To recover them in the panel:
 
 - **Widen Tm range:** Try `minTm=58` and `maxTm=64`.
 - **Increase primer length range:** Try `minLen=17` and `maxLen=28`.
