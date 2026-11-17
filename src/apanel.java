@@ -36,6 +36,7 @@ public class apanel {
         public String[] genomeMasks = {"*.*"};
         boolean homology = false;
         boolean multiplex = true;
+        final List<String> errors = new ArrayList<>(); // problems that stop the run before anything is written
     }
 
     // ========================== HELPERS ==========================
@@ -238,40 +239,41 @@ public class apanel {
         try (BufferedReader br = new BufferedReader(new FileReader(infile))) {
             String line;
             while ((line = br.readLine()) != null) {
+                if (line.trim().startsWith("#")) {
+                    continue; // a comment, even when it holds a key
+                }
                 String cline = line;
                 line = line.toLowerCase();
 
                 // --- Path-based parameters ---
-                Path folderPath = validatePath(cline, "folder_path=", true, false);
+                Path folderPath = validatePath(cline, "folder_path=", true, false, cfg.errors);
                 if (folderPath != null) {
                     String s = cline.substring(cline.indexOf("folder_path=") + "folder_path=".length()).trim();
                     System.out.println("Target_Folder_path=" + s);
                     tagFolders.add(s);                                  // CHANGED: было BatchReadFiles здесь
                 }
 
-                Path genomePath = validatePath(cline, "genome_path=", true, false);
+                Path genomePath = validatePath(cline, "genome_path=", true, false, cfg.errors);
                 if (genomePath != null) {
                     String s = cline.substring(cline.indexOf("genome_path=") + "genome_path=".length()).trim();
                     System.out.println("Genome_path=" + genomePath);
                     genomeFolders.add(s);                               // CHANGED
                 }
 
-                Path outDir = validatePath(cline, "folder_out=", true, true);
+                // the folder is cleared only once the whole configuration has been checked
+                Path outDir = validatePath(cline, "folder_out=", true, true, cfg.errors);
                 if (outDir != null) {
                     cfg.outPath = cline.substring(cline.indexOf("folder_out=") + "folder_out=".length()).trim();
                     cfg.outPath = stripQuotes(cfg.outPath);
-                    outDir = OutDirUtil.prepareOutputDir(cfg.outPath);
-                    System.out.println("Output_Folder_path=" + outDir);
-                    cfg.outPath = outDir.toString();
                 }
 
-                Path inputFile = validatePath(cline, "target_path=", false, false);
+                Path inputFile = validatePath(cline, "target_path=", false, false, cfg.errors);
                 if (inputFile != null) {
                     System.out.println("Input_file= " + inputFile);
                     tagfiles.add(inputFile.toString());
                 }
 
-                Path refFile = validatePath(cline, "reference_path=", false, false);
+                Path refFile = validatePath(cline, "reference_path=", false, false, cfg.errors);
                 if (refFile != null) {
                     System.out.println("Reference_file_path= " + refFile);
                     reffiles.add(refFile.toString());
@@ -316,6 +318,9 @@ public class apanel {
                 if (line.startsWith("target_primers=")) {
                     primerFileHolder[0] = valueAfterEquals(line);
                     System.out.println("Target_primers=" + primerFileHolder[0]);
+                    if (!primerFileHolder[0].isEmpty() && !Files.isRegularFile(Paths.get(stripQuotes(primerFileHolder[0])))) {
+                        cfg.errors.add("target_primers: file does not exist: " + primerFileHolder[0]);
+                    }
                 }
                 if (line.startsWith("forwardtail=")) {
                     cfg.fTail = dna.DNA(valueAfterEquals(line));
@@ -377,27 +382,58 @@ public class apanel {
         // NEW: раскрываем папки уже с учётом масок
         BatchReadFiles brf = new BatchReadFiles();
         for (String folder : tagFolders) {
+            int matched = 0;
             for (String mask : cfg.tagMasks) {
                 String[] files = brf.BatchReadFiles(new String[]{folder, mask});
                 if (files != null && files.length > 0) {
                     tagfiles.addAll(List.of(files));
+                    matched += files.length;
                     System.out.println("Matched " + files.length + " file(s) for " + folder + " / " + mask);
                 }
             }
+            if (matched == 0) {
+                cfg.errors.add("folder_path: no file matching " + String.join(", ", cfg.tagMasks) + " in " + folder);
+            }
         }
         for (String folder : genomeFolders) {
+            int matched = 0;
             for (String mask : cfg.genomeMasks) {
                 String[] files = brf.BatchReadFiles(new String[]{folder, mask});
                 if (files != null && files.length > 0) {
                     genomefiles.addAll(List.of(files));
+                    matched += files.length;
                     System.out.println("Matched " + files.length + " file(s) for " + folder + " / " + mask);
                 }
+            }
+            if (matched == 0) {
+                cfg.errors.add("genome_path: no file matching " + String.join(", ", cfg.genomeMasks) + " in " + folder);
             }
         }
         dedupInPlace(tagfiles);
         dedupInPlace(genomefiles);
+        if (tagfiles.isEmpty() && cfg.errors.isEmpty()) {
+            cfg.errors.add("no target files: give target_path= or folder_path=");
+        }
 
         return cfg;
+    }
+
+    /**
+     * Stops the run when the configuration has errors, before anything is
+     * designed or the output folder is touched: a missing genome or target file
+     * would otherwise give a panel that looks complete but is not.
+     */
+    private static void stopOnErrors(PrimerConfig cfg, String infile) {
+        if (cfg.errors.isEmpty()) {
+            return;
+        }
+        System.err.println("\nThe configuration file " + infile + " has errors:");
+        for (String e : cfg.errors) {
+            System.err.println("  " + e);
+        }
+        System.err.println("Nothing was designed" + (cfg.outPath != null ? ", and the output folder was left as it is" : "")
+                + ". Fix the lines above, or turn a line off by starting it with #.");
+        System.exit(1);
     }
 
     // ========================== SINGLE-PLEX ==========================
@@ -684,6 +720,12 @@ public class apanel {
 
         // 1. Parse configuration
         PrimerConfig cfg = parseConfig(infile, tagfiles, reffiles, genomefiles, primerFileHolder);
+        stopOnErrors(cfg, infile);
+        if (cfg.outPath != null) {
+            Path outDir = OutDirUtil.prepareOutputDir(cfg.outPath);
+            System.out.println("Output_Folder_path=" + outDir);
+            cfg.outPath = outDir.toString();
+        }
 
         // 2. Read primers
         String[] primers = readPrimers(primerFileHolder[0]);
@@ -1342,7 +1384,11 @@ public class apanel {
         return ms.mask(seqs.toArray(String[]::new), 18);//int GENOME_KMER_SIZE = 18;
     }
 
-    private static Path validatePath(String line, String key, boolean isDirectory, boolean allowMissing) {
+    /**
+     * The path given for {@code key} on this line, or null if the line does not
+     * give one; a path that cannot be used is added to {@code errors}.
+     */
+    private static Path validatePath(String line, String key, boolean isDirectory, boolean allowMissing, List<String> errors) {
         if (!line.toLowerCase().contains(key.toLowerCase())) {
             return null;
         }
@@ -1352,30 +1398,31 @@ public class apanel {
         if (pathStr.isEmpty()) {
             return null;
         }
+        String name = key.substring(0, key.length() - 1);
         try {
             Path path = Paths.get(pathStr);
             if (!Files.exists(path)) {
                 if (allowMissing) {
                     return path;
                 }
-                System.err.println("Error: Path does not exist: " + path);
+                errors.add(name + ": path does not exist: " + path);
                 return null;
             }
             if (isDirectory && !Files.isDirectory(path)) {
-                System.err.println("Error: Path is not a directory: " + path);
+                errors.add(name + ": path is not a folder: " + path);
                 return null;
             }
             if (!isDirectory && !Files.isRegularFile(path)) {
-                System.err.println("Error: Path is not a file: " + path);
+                errors.add(name + ": path is not a file: " + path);
                 return null;
             }
             if (!Files.isReadable(path)) {
-                System.err.println("Error: No read permission: " + path);
+                errors.add(name + ": no read permission: " + path);
                 return null;
             }
             return path;
         } catch (Exception e) {
-            System.err.println("Error processing path: " + e.getMessage());
+            errors.add(name + ": unusable path " + pathStr + ": " + e.getMessage());
             return null;
         }
     }
