@@ -518,6 +518,8 @@ reversetail=
 
 > **Warning:** If `folder_out` points to an existing directory, its contents will be **deleted** before PCRpanel writes new results. Use a dedicated output path to avoid data loss.
 
+PCRpanel checks the whole configuration file before it designs or deletes anything. A path that does not exist or cannot be read — `target_path`, `folder_path`, `genome_path`, `reference_path`, `target_primers`, or a `folder_out` that is a file — a folder with no file matching its mask, or no target file at all, stops the run with a list of the errors and exit code 1, and leaves the output folder as it is. A panel designed without the genome reference or without some of its targets would otherwise look complete. To turn a line off, start it with `#`.
+
 ---
 
 ## Adapter & Tail Sequences
