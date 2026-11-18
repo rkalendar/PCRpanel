@@ -58,7 +58,7 @@
 | **Flexible targeting** | Target exons, introns, promoters, UTRs, or arbitrary coordinate ranges |
 | **Promoter targeting** | Designs primers for a configurable upstream region 5′ of each transcript's transcription start site (TSS) |
 | **Homology mode** | Designs common (consensus) primers from shared regions across multiple input files |
-| **Existing primer import** | Starts from your current primer/probe list and fills gaps |
+| **Supplementing a panel** | Keeps the primer pairs you already have and designs only the amplicons for what they do not cover |
 | **Repeat filtering** | Avoids off-target amplification by masking repeated sequences |
 | **Genome reference** | Optional, a reference genome to identify gene duplications and unknown repeats |
 | **Adapter support** | Attach 5′/3′ tails — adapters, UMIs, barcodes, indexing sequences — to any primer |
@@ -343,7 +343,7 @@ Other standard IUPAC codes (`r`, `y`, `m`, `k`, `b`, `d`, `h`, `v`) are also acc
 | Parameter | Description | Repeatable? |
 |---|---|---|
 | `target_path` | Path to an individual GenBank or FASTA target file | Yes |
-| `target_primers` | Path to an existing primer/probe list to incorporate | No |
+| `target_primers` | Path to the list of primers the panel already has; the design only supplements them (see [Primer List](#primer-list-target_primers)) | No |
 | `folder_path` | Directory of target files (subdirectories included) | No |
 | `folder_out` | Output directory for results | No |
 | `genome_path` | Directory of reference genome FASTA files (subdirectories included) | No |
@@ -589,7 +589,20 @@ Standard FASTA format with one or more records per file. Each record is treated 
 
 ### Primer List (`target_primers`)
 
-A plain-text file containing existing primers or probes to incorporate into the panel design. PCRpanel will use these as fixed anchors and design additional primers to fill coverage gaps.
+A plain-text file with the primers a panel already has. PCRpanel keeps them as they are and designs only what they do not cover — see [Supplementing an Existing Panel](#supplementing-an-existing-panel).
+
+```
+# name, sequence, tube (optional)
+NG_013019.2:F_7-26	acactctttccctacacgacgctcttccgatctccagcgtgagtacaatggac	1
+NG_013019.2:R_229-211	gtgactggagttcagacgtgtgctcttccgatctgctcctccgaaaggagtca	1
+```
+
+| Rule | Detail |
+|---|---|
+| **Columns** | A name and a sequence separated by a tab or a space, or a sequence alone; a third column may give the tube (1, 2, …) the primer is amplified in. Lines starting with `#` are ignored |
+| **Pairs** | Two primers on consecutive lines, in either order, that face each other on a target sequence are an existing pair. This is the layout of `*_panelprimers.txt` |
+| **Where a primer binds** | Found by its sequence, on any of the target files, so the names need not carry coordinates. A primer may include its adapter tail: a `forwardtail` or `reversetail` of the configuration is taken off, and otherwise the 3′ part of the primer, at least 15 bases, has to match |
+| **Other primers** | A primer that is in no pair on the targets — a probe, or a primer of another assay — is only avoided: no new primer may form a primer-dimer with it |
 
 ---
 
@@ -993,6 +1006,36 @@ A pair in its own tube has to get along with nothing but itself: its Tm need onl
 
 In [homology mode](#panel-mode) these pairs are designed for the file they belong to, and are not consensus primers. A stretch for which no step gives a pair is listed at the end of the file; it is typically masked as a whole, or lies too close to the end of the sequence for a primer to fit beyond it.
 
+### Supplementing an Existing Panel
+
+With a [primer list](#primer-list-target_primers) in `target_primers`, PCRpanel does not design the panel anew. The pairs of the list that lie on the targets are existing amplicons: what they read between their primers counts as covered, and the panel holds only the new amplicons needed for the rest.
+
+- **Regions the existing pairs read in part** get no regular tiling. Their gaps are closed one at a time, with the amplicon that reads most of what is still unread, and a new amplicon that ends up reading nothing of its own is taken out again.
+- **Regions they do not touch**, and target files without any existing pair, are designed as usual.
+- **Tubes.** When the list gives the tube of a pair, the pair stays in that tube — Panel1 for tube 1, and so on — and a new amplicon joins it only if it overlaps no amplicon there and forms no primer-dimer with its primers; otherwise it goes to another tube or to a new one. Without tubes in the list, the new amplicons are assembled into tubes of their own, and are not checked against the existing primers: amplify them apart from the existing tubes, or give the tubes in the list.
+- **What stays unread** by both goes, as always, to [`*_separate_pcr.txt`](#separate-pcr-for-uncovered-regions) and `*_uncovered.fasta`.
+
+The panel report starts with the existing pairs found on the sequence, and the coverage report counts them as a pool of their own; `All pools combined` is the old and the new together:
+
+```
+Existing primer pairs: 20 pair(s) of the target_primers list lie on this sequence.
+They are kept as they are. The panel below holds only the amplicons needed for the bases they do not read.
+Forward	Reverse	Amplicon	Size (bp)	Tube
+NG_013019.2:F_7-26	NG_013019.2:R_229-211	7-229	223	Panel1
+…
+Pool            Amplicons  Target bp covered  Coverage  Regions full  Partial  Uncovered
+Existing pairs  20         2390               79.9%     4             4        2
+Panel1          3          459                15.4%     2             1        7
+Panel2          1          338                11.3%     0             1        9
+Panel3          2          410                13.7%     0             3        7
+Panel4          1          162                5.4%      0             1        9
+All pools combined 27  2964                   99.1%     9             1        0
+```
+
+Here the `Panel` rows count the new amplicons only. `*_panelprimers.txt` lists the new primers alone, ready for ordering. The panel map draws the existing pairs on a row of their own, and the BED tracks hold them too, so that primer trimming removes the old and the new primers alike: their amplicons are named `ID_N_existing`, and their tube is the one the list gives, or 0.
+
+The console says how many pairs were found. A pair that is not found — a primer that does not match the target, or a forward and a reverse primer that are not on consecutive lines — is not counted as covering anything, so check that number against the list.
+
 ### Panel Map and BED Tracks
 
 Each target also gets a panel map, `*_panel.svg`, which opens in any web browser:
@@ -1009,6 +1052,7 @@ Each target also gets a panel map, `*_panel.svg`, which opens in any web browser
   Primers may still overlap up to `maskedBases` masked bases. Hovering over a bar shows its reason and coordinates.
 - The **Candidates** row shows the primers that passed every filter — Tm, length, 3′ and 5′ ends, complexity, masking, self-dimers — whether or not they ended up in a pair: forward primers as arrows pointing right on the upper line, reverse primers pointing left below. Where neither line has an arrow, no primer could be designed; where forward and reverse arrows lie further apart than `maxPCR`, they cannot form a pair. Of candidates that overlap, the design keeps the one of higher complexity, and so does the map. Hovering over an arrow shows the primer's name, position, length, Tm and the region it was designed for.
 - One row per tube — Panel1, Panel2 and any extra tubes — shows its amplicons, pale, with the primers in full colour at the ends. Amplicons that would overlap on screen are drawn on separate lines.
+- With a `target_primers` list, the **Existing** row above the tubes shows the pairs the panel already had, as hollow amplicons with dark primers; hovering over one shows its primers and, when the list gives it, its tube.
 - Introns are collapsed: each stretch of sequence carrying a target or an amplicon is drawn to scale, and the sequence between two stretches is replaced by a gap labelled with its length. A target not covered in full is drawn with `maxPCR` bp on each side — the stretch its primers would have to lie in — so the Masked row shows what stood in their way.
 - Hovering over a region shows its [name](#region-names) with its number in the coverage report, its coordinates, strand and coverage and, where it applies, the widened search flanks. For a target not covered in full it also shows how much of that stretch is masked, by reason, and why its design region got no primer pair. Hovering over an amplicon shows its tube, the design region it was designed for, as named in the panel listing, its coordinates, size and primers:
 
@@ -1106,7 +1150,7 @@ multiplex=false
 
 ### 5. Building on Existing Primers
 
-Start from a validated primer set and let PCRpanel fill coverage gaps:
+Start from a validated primer set and let PCRpanel add only the amplicons its gaps need — see [Supplementing an Existing Panel](#supplementing-an-existing-panel):
 
 ```ini
 target_path=/data/target_gene.gb
