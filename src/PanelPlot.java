@@ -34,6 +34,7 @@ public class PanelPlot {
     private static final String GENOME_REPEAT = "#8a8a1a";
     private static final String LOW_COMPLEXITY = "#1d8fb8";
     private static final String CANDIDATE = "#73726c";
+    private static final String EXISTING = "#2c2c2a";  // existing pairs: hollow amplicons with dark primers
 
     private static final int WIDTH = 1200;
     private static final int LEFT = 90;              // column of track names
@@ -100,7 +101,7 @@ public class PanelPlot {
         }
     }
 
-    /** An amplicon in its tube (1-based). */
+    /** An amplicon in its tube (1-based); tube 0 is the row of the existing pairs. */
     private static final class Amp {
 
         final Pair pcr;
@@ -115,6 +116,11 @@ public class PanelPlot {
             return pcr.fx5;
         }
 
+        /** The tube for the BED files: that of the panel, or the one the list gives an existing pair, 0 if none. */
+        int pool() {
+            return pcr.existing ? pcr.panelID : tube;
+        }
+
         int end() {
             return pcr.rx5 + 1;
         }
@@ -124,6 +130,7 @@ public class PanelPlot {
     private final int seqLen;
     private final boolean multiplex;
     private final int ntubes;
+    private final int firstTube;        // 0 when there are existing pairs to draw, else 1
     private final List<Target> targets = new ArrayList<>();
     private final List<Amp> amps = new ArrayList<>();
     private final List<int[]> covered;  // what the amplicons read, merged, 0-based half-open
@@ -142,6 +149,9 @@ public class PanelPlot {
      * @param widened   per design region, the widened search flank (bp), 0 for
      *                  the default; may be null
      * @param tubes     amplicons of this sequence per tube, index 0 = Panel1
+     * @param existing  the pairs the panel already had on this sequence, drawn
+     *                  on a row of their own and counted as covering what they
+     *                  read; may be empty
      * @param multiplex false for a single-plex panel, drawn as one pool
      * @param search    what the primer search found: where primers cannot bind
      *                  and why, the candidate primers, why a region got no
@@ -150,7 +160,7 @@ public class PanelPlot {
      *                  shown around a target not covered in full; 0 for none
      */
     public PanelPlot(String name, int seqLen, int[] bounds, int[] merged, List<ExonPromoterExtractor.Region> info,
-            int[] widened, List<List<Pair>> tubes, boolean multiplex, PrimerDesign.SearchMap search, int flank) {
+            int[] widened, List<List<Pair>> tubes, List<Pair> existing, boolean multiplex, PrimerDesign.SearchMap search, int flank) {
         this.name = name;
         this.seqLen = seqLen;
         this.multiplex = multiplex;
@@ -170,6 +180,10 @@ public class PanelPlot {
                 amps.add(new Amp(pcr, k + 1));
             }
         }
+        for (Pair pcr : existing) {
+            amps.add(new Amp(pcr, 0));
+        }
+        firstTube = existing.isEmpty() ? 1 : 0;
         amps.sort(Comparator.comparingInt(Amp::start).thenComparingInt(Amp::end).thenComparingInt(a -> a.tube));
         int last = multiplex ? 2 : 1;
         for (Amp a : amps) {
@@ -219,6 +233,9 @@ public class PanelPlot {
     }
 
     private String tubeName(int tube) {
+        if (tube == 0) {
+            return "Existing";
+        }
         return multiplex ? "Panel" + tube : "Panel";
     }
 
@@ -325,7 +342,7 @@ public class PanelPlot {
                 siteY[r] = ty - 2;
                 ty += 2 * SITE_H + 6;
             }
-            for (int t = 1; t <= ntubes; t++) {
+            for (int t = firstTube; t <= ntubes; t++) {
                 tubeY[r][t] = ty;
                 ty += Math.max(1, laneEnds.get(r).get(t).size()) * LANE_H + 4;
             }
@@ -350,7 +367,7 @@ public class PanelPlot {
                 text(s, 12, maskY[r] + maskTracks.size() * MASK_BAR / 2.0, "Masked", 12, MUTED, "start");
                 text(s, 12, siteY[r] + SITE_H, "Candidates", 12, MUTED, "start");
             }
-            for (int t = 1; t <= ntubes; t++) {
+            for (int t = firstTube; t <= ntubes; t++) {
                 text(s, 12, tubeY[r][t] + 5, tubeName(t), 12, MUTED, "start");
             }
         }
@@ -445,7 +462,7 @@ public class PanelPlot {
             }
         }
 
-        // Amplicons: the amplicon pale, its primers in full colour
+        // Amplicons: the amplicon pale, its primers in full colour; an existing pair hollow
         for (int i = 0; i < amps.size(); i++) {
             Amp a = amps.get(i);
             Pair p = a.pcr;
@@ -454,10 +471,13 @@ public class PanelPlot {
             double x1 = LEFT + sx[si] + (a.start() - st.get(si)[0]) * scale;
             double x2 = LEFT + sx[si] + (a.end() - st.get(si)[0]) * scale;
             double ay = tubeY[r][a.tube] + lane[i] * LANE_H;
-            String colour = tubeColour(a.tube);
+            String colour = (a.tube == 0) ? EXISTING : tubeColour(a.tube);
             s.append("<g><title>").append(esc(ampliconTip(a))).append("</title>");
             s.append("<rect x=\"").append(f(x1)).append("\" y=\"").append(f(ay)).append("\" width=\"").append(f(x2 - x1))
-                    .append("\" height=\"10\" rx=\"2\" fill=\"").append(colour).append("\" fill-opacity=\"0.35\"");
+                    .append("\" height=\"10\" rx=\"2\" fill=\"").append(colour).append("\" fill-opacity=\"").append(a.tube == 0 ? "0" : "0.35").append('"');
+            if (a.tube == 0) {
+                s.append(" stroke=\"").append(EXISTING).append("\" stroke-width=\"0.8\"");
+            }
             if (p.note != null) {
                 s.append(" stroke=\"").append(UNCOVERED).append("\" stroke-dasharray=\"3 2\"");
             }
@@ -491,11 +511,18 @@ public class PanelPlot {
         for (int t = 1; t <= ntubes; t++) {
             sum.append(t > 1 ? ", " : "").append(tubeName(t)).append(' ').append(perTube[t]);
         }
-        sum.append(" amplicons. Introns collapsed; hover over a region or amplicon for details.");
+        sum.append(firstTube == 0 ? " new amplicons, " + perTube[0] + " existing pairs" : " amplicons")
+                .append(". Introns collapsed; hover over a region or amplicon for details.");
         text(s, 12, 46, sum.toString(), 12, MUTED, "start");
 
         double x = 12;
         double y = 68;
+        if (firstTube == 0) {
+            s.append("<rect x=\"").append(f(x)).append("\" y=\"").append(f(y - 5)).append("\" width=\"10\" height=\"10\" rx=\"2\" fill=\"none\" stroke=\"")
+                    .append(EXISTING).append("\" stroke-width=\"0.8\"/>\n");
+            text(s, x + 14, y, "existing pair", 11, MUTED, "start");
+            x += 14 + "existing pair".length() * 6.0 + 14;
+        }
         for (int t = 1; t <= ntubes; t++) {
             x = legend(s, x, y, tubeColour(t), tubeName(t), false);
         }
@@ -598,7 +625,11 @@ public class PanelPlot {
     private String ampliconTip(Amp a) {
         Pair p = a.pcr;
         StringBuilder s = new StringBuilder();
-        s.append(tubeName(a.tube)).append(", ").append(names.design(p.exonid)).append('\n');
+        if (p.existing) {
+            s.append("Existing pair").append(p.panelID > 0 ? ", tube " + p.panelID : "").append('\n');
+        } else {
+            s.append(tubeName(a.tube)).append(", ").append(names.design(p.exonid)).append('\n');
+        }
         s.append(a.start() + 1).append('-').append(a.end()).append(", ").append(p.pcrsize).append(" bp\n");
         s.append(p.fprimername).append(" (").append(p.fln).append(" nt)\n");
         s.append(p.rprimername).append(" (").append(p.rln).append(" nt)");
@@ -652,7 +683,8 @@ public class PanelPlot {
     /**
      * Panel primers in the primalscheme BED layout: chrom, start, end,
      * name_N_LEFT / name_N_RIGHT, tube (pool), strand, primer sequence without
-     * the adapter tail. Amplicons are numbered along the sequence. This is the
+     * the adapter tail. Amplicons are numbered along the sequence, the existing
+     * pairs among them, with the tube their list gives or 0. This is the
      * layout read by primer-trimming tools such as ivar trim and samtools
      * ampliconclip.
      */
@@ -663,10 +695,10 @@ public class PanelPlot {
             n++;
             Pair p = a.pcr;
             s.append(name).append('\t').append(p.fx5).append('\t').append(p.fx5 + p.fln).append('\t')
-                    .append(name).append('_').append(n).append("_LEFT\t").append(a.tube).append("\t+\t")
+                    .append(name).append('_').append(n).append("_LEFT\t").append(a.pool()).append("\t+\t")
                     .append(binding(p.fprimer, p.fln)).append('\n');
             s.append(name).append('\t').append(p.rx5 + 1 - p.rln).append('\t').append(p.rx5 + 1).append('\t')
-                    .append(name).append('_').append(n).append("_RIGHT\t").append(a.tube).append("\t-\t")
+                    .append(name).append('_').append(n).append("_RIGHT\t").append(a.pool()).append("\t-\t")
                     .append(binding(p.rprimer, p.rln)).append('\n');
         }
         return s.toString();
@@ -684,9 +716,9 @@ public class PanelPlot {
             n++;
             Pair p = a.pcr;
             s.append(name).append('\t').append(a.start()).append('\t').append(a.end()).append('\t')
-                    .append(name).append('_').append(n).append('\t').append(a.tube).append("\t.\t")
+                    .append(name).append('_').append(n).append(p.existing ? "_existing" : "").append('\t').append(a.pool()).append("\t.\t")
                     .append(a.start() + p.fln).append('\t').append(a.end() - p.rln).append('\t')
-                    .append(rgb(tubeColour(a.tube))).append('\n');
+                    .append(rgb(p.existing ? EXISTING : tubeColour(a.tube))).append('\n');
         }
         return s.toString();
     }

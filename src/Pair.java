@@ -24,6 +24,7 @@ class Pair {
 
     String note;        // set when the pair was forced into the panel despite a conflict
     int seq;            // target sequence (file) of the pair, when several share the pools
+    boolean existing;   // a pair of the target_primers list: kept as it is, with panelID its tube or 0 if not given
 
     public void SetPanelID(int n) {
         panelID = n;

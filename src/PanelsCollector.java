@@ -23,6 +23,7 @@ public class PanelsCollector {
     private Map<Integer, List<Integer>> noPairs = new HashMap<>(); // per sequence: targets (1-based) that no candidate pair reaches
     private List<RegionNames> names = new ArrayList<>(); // per sequence: names of its regions in the notes
     private List<PrimerDesign.SearchMap> searches = new ArrayList<>(); // per sequence: why a region got no primer pair
+    private List<Pair> existing = new ArrayList<>();    // pairs the panel already has: they cover what they read and are never moved
 
     /**
      *
@@ -126,6 +127,44 @@ public class PanelsCollector {
         return line + ": " + ((why != null) ? why : "its design region has primer pairs, but none reaches this target");
     }
 
+    /**
+     * The pairs the panel already has (Pair.existing, with Pair.seq set). What
+     * they read counts as covered, so the panel only supplements them: a design
+     * region they read in part is not tiled, only its gaps are closed. A pair
+     * whose tube is known (Pair.panelID) stays in that tube, and a new amplicon
+     * joins it only where it fits; a pair of unknown tube is in none.
+     */
+    public void setExisting(List<Pair> existing) {
+        this.existing = existing;
+    }
+
+    /** What the existing pairs read on a sequence, merged. */
+    private List<int[]> existingReads(int seq) {
+        List<int[]> iv = new ArrayList<>();
+        for (Pair e : existing) {
+            if (e.seq == seq) {
+                iv.add(CoverageReport.insert(e));
+            }
+        }
+        return CoverageReport.merge(iv);
+    }
+
+    /** The design regions, as (seq << 32 | region), that the existing pairs read in part. */
+    private Set<Long> anchoredRegions(List<int[]> targets) {
+        Set<Long> out = new HashSet<>();
+        for (int s = 0; s < targets.size() && !existing.isEmpty(); s++) {
+            List<int[]> read = existingReads(s);
+            int[] tb = targets.get(s);
+            for (int i = 0; i + 1 < tb.length; i += 2) {
+                int[] t = CoverageReport.targetInterval(tb[i], tb[i + 1]);
+                if (t != null && CoverageReport.overlap(read, t[0], t[1]) > 0) {
+                    out.add(((long) s << 32) | namesOf(s).designOf(i / 2));
+                }
+            }
+        }
+        return out;
+    }
+
     public void CombinePairsPanel(int[] targets, int npools) {
         CombinePairsPanel(List.of(targets), npools);
     }
@@ -171,6 +210,19 @@ public class PanelsCollector {
             pcr.SetPanelID(0);
             pcr.note = null;
         }
+        // Existing pairs stay in their tubes, where the list gives them. In
+        // single-plex every amplicon is amplified on its own, so tubes do not matter.
+        if (extraTubes) {
+            for (Pair e : existing) {
+                if (e.panelID > 0) {
+                    while (pools.size() < e.panelID) {
+                        pools.add(new ArrayList<>());
+                    }
+                    pools.get(e.panelID - 1).add(e);
+                }
+            }
+            mainPools = pools.size();
+        }
 
         // 1) candidate pairs of each region, in tiling order
         TreeMap<Long, List<Pair>> byRegion = new TreeMap<>();
@@ -182,10 +234,16 @@ public class PanelsCollector {
             region.sort(Comparator.comparingInt(p -> p.fx5));
         }
 
-        // 2) problematic regions first (stable sort: ties stay in exon order)
+        // 2) problematic regions first (stable sort: ties stay in exon order). A region
+        // that existing pairs already read in part is left to step 3, which adds
+        // only the amplicons its gaps need.
         regions.sort(Comparator.comparingInt(List::size));
+        Set<Long> anchored = anchoredRegions(targets);
         for (List<Pair> region : regions) {
-            tileRegion(region);
+            Pair first = region.get(0);
+            if (!anchored.contains(((long) first.seq << 32) | first.exonid)) {
+                tileRegion(region);
+            }
         }
 
         // 3) coverage guarantee, again for the targets with the fewest pairs first
@@ -193,6 +251,7 @@ public class PanelsCollector {
         List<Integer> reaching = new ArrayList<>();
         for (int s = 0; s < targets.size(); s++) {
             int[] tb = targets.get(s);
+            List<int[]> read = existingReads(s);
             int n = 0;
             for (int i = 0; i + 1 < tb.length; i += 2) {
                 int[] t = CoverageReport.targetInterval(tb[i], tb[i + 1]);
@@ -206,7 +265,7 @@ public class PanelsCollector {
                         r++;
                     }
                 }
-                if (r == 0) {
+                if (r == 0 && CoverageReport.overlap(read, t[0], t[1]) < t[1] - t[0]) {
                     noPairs.computeIfAbsent(s, k -> new ArrayList<>()).add(n);
                 }
                 tv.add(new int[]{s, t[0], t[1]});
@@ -225,6 +284,7 @@ public class PanelsCollector {
         fillGaps(byDifficulty, FIT);
         fillGaps(byDifficulty, RELOCATE);
         fillGaps(byDifficulty, extraTubes ? EXTRA_TUBE : FORCE);
+        prune(tv, anchored);
 
         sortedPools = new ArrayList<>();
         for (int k = 0; k < pools.size(); k++) {
@@ -232,6 +292,57 @@ public class PanelsCollector {
         }
         p1 = sortedPools.get(0);
         p2 = (mainPools > 1) ? sortedPools.get(1) : new ArrayList<>();
+    }
+
+    /**
+     * Takes out the new amplicons of the anchored regions that read no target
+     * base of their own any more. The gaps of such a region are closed one at a
+     * time, and a later amplicon can come to read all that an earlier one did;
+     * a supplement should not carry it. Extra tubes are looked at first, and one
+     * left empty is dropped.
+     */
+    private void prune(List<int[]> targets, Set<Long> anchored) {
+        if (anchored.isEmpty()) {
+            return;
+        }
+        for (int k = pools.size() - 1; k >= 0; k--) {
+            for (Pair p : new ArrayList<>(pools.get(k))) {
+                if (p.existing || !anchored.contains(((long) p.seq << 32) | p.exonid)) {
+                    continue;
+                }
+                int with = read(targets, p.seq);
+                pools.get(k).remove(p);
+                if (read(targets, p.seq) < with) {
+                    pools.get(k).add(p);
+                } else {
+                    p.SetPanelID(0);
+                    p.note = null;
+                    forced.remove(p);
+                }
+            }
+        }
+        for (int k = pools.size() - 1; k >= mainPools; k--) {
+            if (pools.get(k).isEmpty()) {
+                pools.remove(k);
+                for (int j = k; j < pools.size(); j++) {
+                    for (Pair p : pools.get(j)) {
+                        p.SetPanelID(j + 1);
+                    }
+                }
+            }
+        }
+    }
+
+    /** Target bases of a sequence that the panel and the existing pairs read. */
+    private int read(List<int[]> targets, int seq) {
+        List<int[]> covered = coveredIntervals(seq);
+        int n = 0;
+        for (int[] t : targets) {
+            if (t[0] == seq) {
+                n += CoverageReport.overlap(covered, t[1], t[2]);
+            }
+        }
+        return n;
     }
 
     /**
@@ -392,7 +503,7 @@ public class PanelsCollector {
     /**
      * Another main pool for each blocking amplicon, where it fits without a
      * conflict, or null when one of them has nowhere to go. Forced amplicons
-     * stay where they are.
+     * and existing pairs stay where they are.
      */
     private int[] relocation(List<Pair> blocking, int from) {
         if (blocking.isEmpty() || mainPools < 2) {
@@ -401,7 +512,7 @@ public class PanelsCollector {
         int[] to = new int[blocking.size()];
         for (int i = 0; i < blocking.size(); i++) {
             Pair y = blocking.get(i);
-            if (y.note != null) {
+            if (y.note != null || y.existing) {
                 return null;
             }
             to[i] = -1;
@@ -468,7 +579,7 @@ public class PanelsCollector {
         List<String> overlaps = new ArrayList<>();
         for (Pair q : pools.get(pool)) {
             if (overlaps(pcr, q)) {
-                overlaps.add(namesOf(q.seq).design(q.exonid) + " " + (q.fx5 + 1) + "-" + (q.rx5 + 1));
+                overlaps.add((q.existing ? "existing pair" : namesOf(q.seq).design(q.exonid)) + " " + (q.fx5 + 1) + "-" + (q.rx5 + 1));
             }
             String[][] combos = {
                 {pcr.fprimer, pcr.fprimername, q.fprimer, q.fprimername},
@@ -548,7 +659,7 @@ public class PanelsCollector {
     }
 
     private List<int[]> coveredIntervals(int seq) {
-        List<int[]> iv = new ArrayList<>();
+        List<int[]> iv = new ArrayList<>(existingReads(seq));
         for (List<Pair> pool : pools) {
             for (Pair q : pool) {
                 if (q.seq == seq) {
@@ -559,8 +670,14 @@ public class PanelsCollector {
         return CoverageReport.merge(iv);
     }
 
+    /** The new amplicons of a pool in report order; the existing pairs of that tube are not listed. */
     private List<Pair> sortedPool(int pool) {
-        List<Pair> list = new ArrayList<>(pools.get(pool));
+        List<Pair> list = new ArrayList<>();
+        for (Pair p : pools.get(pool)) {
+            if (!p.existing) {
+                list.add(p);
+            }
+        }
         list.sort(Comparator.comparingInt((Pair p) -> p.seq).thenComparingInt(p -> p.exonid).thenComparingInt(p -> p.fx5));
         return list;
     }
@@ -581,7 +698,7 @@ public class PanelsCollector {
         for (int k = mainPools; k < pools.size(); k++) {
             int n = 0;
             for (Pair pcr : pools.get(k)) {
-                if (pcr.seq == seq) {
+                if (pcr.seq == seq && !pcr.existing) {
                     n++;
                 }
             }

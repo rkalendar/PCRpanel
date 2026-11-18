@@ -97,31 +97,6 @@ public class apanel {
     }
 
     /**
-     * Read primers from a file, returning only those longer than 8 characters.
-     */
-    private static String[] readPrimers(String primerFile) {
-        if (primerFile == null || primerFile.length() <= 1) {
-            return new String[0];
-        }
-        List<String> result = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(primerFile))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                line = line.trim().toLowerCase();
-                if (!line.isBlank()) {
-                    String p = PrimerReturn(line);
-                    if (p.length() > 8) {
-                        result.add(p);
-                    }
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Warning: could not read primer file '" + primerFile + "': " + e.getMessage());
-        }
-        return result.toArray(new String[0]);
-    }
-
-    /**
      * Read and concatenate reference FASTA file(s) into a single cleaned
      * sequence string.
      */
@@ -316,9 +291,9 @@ public class apanel {
                     System.out.println("5End=" + cfg.e5);
                 }
                 if (line.startsWith("target_primers=")) {
-                    primerFileHolder[0] = valueAfterEquals(line);
+                    primerFileHolder[0] = stripQuotes(valueAfterEquals(cline));
                     System.out.println("Target_primers=" + primerFileHolder[0]);
-                    if (!primerFileHolder[0].isEmpty() && !Files.isRegularFile(Paths.get(stripQuotes(primerFileHolder[0])))) {
+                    if (!primerFileHolder[0].isEmpty() && !Files.isRegularFile(Paths.get(primerFileHolder[0]))) {
                         cfg.errors.add("target_primers: file does not exist: " + primerFileHolder[0]);
                     }
                 }
@@ -439,8 +414,18 @@ public class apanel {
     // ========================== SINGLE-PLEX ==========================
     private static void runSingleplexAll(LongIntHashMap map, List<String> tagfiles,
             PrimerConfig cfg, String refsequence,
-            String[] primers) throws Exception {
+            ExistingPrimers existing) throws Exception {
         final String ref = "";
+        // which primers of the list are in a pair on some target has to be known before the first design
+        int found = 0;
+        for (String tagfile : tagfiles) {
+            SeqRecord rec = existing.isEmpty() ? null : loadSequenceRecord(tagfile);
+            if (rec != null) {
+                found += existing.pairsOn(rec.sequence).size();
+            }
+        }
+        String[] primers = existing.unpaired();
+        announceExisting(existing, found);
         for (String tagfile : tagfiles) {
             ExonPromoterExtractor ex = new ExonPromoterExtractor(tagfile);
             String sequence = ex.getSequence();
@@ -464,7 +449,7 @@ public class apanel {
                             refsequence, ref, cfg.homology, primers, exons,
                             cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                             cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                            cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, null, separateSettings(cfg));
+                            cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, null, separateSettings(cfg), existing.pairsOn(rec.sequence));
                 }
                 continue;
             }
@@ -476,14 +461,14 @@ public class apanel {
                     refsequence, ref, cfg.homology, primers, exons,
                     cfg.minPcr, cfg.maxPcr, cfg.minLen, cfg.maxLen,
                     cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
-                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, regs, separateSettings(cfg));
+                    cfg.fTail, cfg.rTail, cfg.e5, cfg.e3, regs, separateSettings(cfg), existing.pairsOn(sequence));
         }
     }
 
     // ========================== MULTIPLEX ==========================
     private static void runMultiplexAll(LongIntHashMap map, List<String> tagfiles,
             PrimerConfig cfg, String refsequence,
-            String[] primers) throws Exception {
+            ExistingPrimers existing) throws Exception {
         List<String> sequences = new ArrayList<>();
         List<String> nameSequences = new ArrayList<>();
         List<int[]> exonsSequences = new ArrayList<>();
@@ -502,6 +487,17 @@ public class apanel {
             fileSequences.add(tagfile);
             regionsSequences.add(rec.regions);
         }
+
+        // The pairs the panel already has, on each sequence. The primers of the list
+        // that are in no pair stay oligos that no new primer may form a dimer with.
+        List<List<Pair>> existingPairs = new ArrayList<>();
+        int found = 0;
+        for (String sequence : sequences) {
+            existingPairs.add(existing.pairsOn(sequence));
+            found += existingPairs.get(existingPairs.size() - 1).size();
+        }
+        String[] primers = existing.unpaired();
+        announceExisting(existing, found);
 
         // Phase 2: design primers file-by-file
         List<MultiplexTarget> designs = new ArrayList<>();
@@ -524,6 +520,7 @@ public class apanel {
                     cfg.minTm, cfg.maxTm, cfg.minLc, cfg.prLap,
                     cfg.fTail, cfg.rTail, cfg.e5, cfg.e3);
             t.regions = regionsSequences.get(i);
+            t.existing = existingPairs.get(i);
             designs.add(t);
         }
 
@@ -536,8 +533,13 @@ public class apanel {
         List<int[]> targets = new ArrayList<>();
         List<RegionNames> names = new ArrayList<>();
         List<PrimerDesign.SearchMap> searches = new ArrayList<>();
+        List<Pair> allExisting = new ArrayList<>();
         for (int s = 0; s < designs.size(); s++) {
             MultiplexTarget t = designs.get(s);
+            for (Pair p : t.existing) {
+                p.seq = s;
+            }
+            allExisting.addAll(t.existing);
             for (Pair p : t.pcrcol) {
                 p.seq = s;
             }
@@ -553,6 +555,7 @@ public class apanel {
         PanelsCollector panels = new PanelsCollector(pcrcol, alternatives);
         panels.setRegionNames(names);
         panels.setSearchMaps(searches);
+        panels.setExisting(allExisting);
         panels.CombinePairsPanel(targets, 2);
 
         // Phase 4: reports, file by file
@@ -633,7 +636,10 @@ public class apanel {
 
         h.append("INPUT / OUTPUT").append(nl);
         h.append(helpRow("target_path=FILE",    "Target GenBank/FASTA file. Repeatable."));
-        h.append(helpRow("target_primers=FILE", "Existing primer/probe list to incorporate."));
+        h.append(helpRow("target_primers=FILE", "Primers the panel already has: name, sequence and,"));
+        h.append(helpRow("",                    "optionally, tube. A forward and a reverse primer on"));
+        h.append(helpRow("",                    "consecutive lines are an existing pair; the panel"));
+        h.append(helpRow("",                    "is designed only for what such pairs do not cover."));
         h.append(helpRow("reference_path=FILE", "Reference sequence file. Repeatable."));
         h.append(helpRow("folder_path=DIR",     "Folder of target files (subfolders included)."));
         h.append(helpRow("genome_path=DIR",     "Folder of reference-genome FASTA files (subfolders)."));
@@ -727,8 +733,9 @@ public class apanel {
             cfg.outPath = outDir.toString();
         }
 
-        // 2. Read primers
-        String[] primers = readPrimers(primerFileHolder[0]);
+        // 2. Read the primers the panel already has
+        ExistingPrimers existing = ExistingPrimers.read(primerFileHolder[0]);
+        existing.setTails(cfg.fTail, cfg.rTail);
 
         // 3. Read reference sequences
         String refsequence = readReferenceSequences(reffiles);
@@ -744,9 +751,9 @@ public class apanel {
 
         // 5. Run design
         if (!cfg.multiplex) {
-            runSingleplexAll(map, tagfiles, cfg, refsequence, primers);
+            runSingleplexAll(map, tagfiles, cfg, refsequence, existing);
         } else {
-            runMultiplexAll(map, tagfiles, cfg, refsequence, primers);
+            runMultiplexAll(map, tagfiles, cfg, refsequence, existing);
         }
 
         duration = (System.nanoTime() - startTime) / 1_000_000_000;
@@ -804,6 +811,7 @@ public class apanel {
         PrimersCollector[] rPrimersList;
         int[] widened;
         PrimerDesign.SearchMap search; // what the primer search found, for the panel map
+        List<Pair> existing = new ArrayList<>(); // the pairs the panel already had on this sequence
         List<Pair> pcrcol;
         List<Pair> allPairs;
         StringBuilder sr; // primer list report, its header written at design time
@@ -900,6 +908,7 @@ public class apanel {
 
             System.out.println("\nTarget file name: " + tagfile);
             RegionNames names = new RegionNames(exons, t.regions);
+            sr1.append(existingSection(t.existing));
 
             // Panel1 and Panel2 are the two multiplex tubes; Panel3 onwards, opened only
             // when needed, carry the amplicons that conflict with both
@@ -916,6 +925,7 @@ public class apanel {
                 System.out.println(notes);
             }
             CoverageReport cov = new CoverageReport(cexons, t.regions);
+            addExistingPool(cov, t.existing);
             for (int k = 0; k < pcrpanels.size(); k++) {
                 if (!pcrpanels.get(k).isEmpty()) {
                     List<int[]> iv = new ArrayList<>();
@@ -1000,8 +1010,8 @@ public class apanel {
                 }
             }
 
-            PanelPlot plot = new PanelPlot(t.name, seq.length(), cexons, exons, t.regions, t.widened, pcrpanels, true, t.search, maxpcr);
-            if (!pcrcol.isEmpty()) {
+            PanelPlot plot = new PanelPlot(t.name, seq.length(), cexons, exons, t.regions, t.widened, pcrpanels, t.existing, true, t.search, maxpcr);
+            if (!pcrcol.isEmpty() || !t.existing.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
                     fileWriter.write(sr1.toString());
@@ -1014,6 +1024,50 @@ public class apanel {
         } catch (IOException e) {
             System.out.println("Incorrect file name.\n");
         }
+    }
+
+    /** Says on the console what the target_primers list was taken for. */
+    private static void announceExisting(ExistingPrimers existing, int pairs) {
+        if (existing.isEmpty()) {
+            return;
+        }
+        List<String> alone = existing.unpairedNames();
+        System.out.println("target_primers: " + existing.size() + " primers, " + pairs + " existing pair(s) found on the targets."
+                + (pairs > 0 ? " The panel only supplements what they do not read." : ""));
+        if (!alone.isEmpty()) {
+            System.out.println("target_primers: " + alone.size() + " primer(s) are in no pair on the targets; no new primer may form a dimer with them: "
+                    + String.join(", ", alone.subList(0, Math.min(20, alone.size()))) + (alone.size() > 20 ? ", ..." : ""));
+        }
+    }
+
+    /** The pairs the panel already had on this sequence, for the panel report; empty when there are none. */
+    private static String existingSection(List<Pair> existing) {
+        if (existing.isEmpty()) {
+            return "";
+        }
+        List<Pair> sorted = new ArrayList<>(existing);
+        sorted.sort(java.util.Comparator.comparingInt(p -> p.fx5));
+        StringBuilder s = new StringBuilder();
+        s.append("Existing primer pairs: ").append(sorted.size()).append(" pair(s) of the target_primers list lie on this sequence.\n");
+        s.append("They are kept as they are. The panel below holds only the amplicons needed for the bases they do not read.\n");
+        s.append("Forward\tReverse\tAmplicon\tSize (bp)\tTube\n");
+        for (Pair p : sorted) {
+            s.append(p.fprimername).append('\t').append(p.rprimername).append('\t').append(p.fx5 + 1).append('-').append(p.rx5 + 1)
+                    .append('\t').append(p.pcrsize).append('\t').append(p.panelID > 0 ? "Panel" + p.panelID : "-").append('\n');
+        }
+        return s.append('\n').toString();
+    }
+
+    /** Counts what the existing pairs read as a pool of its own in the coverage report. */
+    private static void addExistingPool(CoverageReport cov, List<Pair> existing) {
+        if (existing.isEmpty()) {
+            return;
+        }
+        List<int[]> iv = new ArrayList<>();
+        for (Pair p : existing) {
+            iv.add(CoverageReport.insert(p));
+        }
+        cov.addPool("Existing pairs", iv);
     }
 
     private static SeparatePcr.Settings separateSettings(PrimerConfig cfg) {
@@ -1138,25 +1192,6 @@ public class apanel {
         return (Integer.parseInt(r.toString()));
     }
 
-    private static String PrimerReturn(String str) {
-        String[] s1 = str.split("\t");
-        String[] s2 = str.split(" ");
-        int n1 = s1.length;
-        int n2 = s2.length;
-        String s = str;
-
-        if (n1 > 1 && n2 < n1) {
-            s = s1[1];
-        }
-        if (n2 > 1 && n1 < n2) {
-            s = s2[1];
-        }
-        if (n1 == 1 && n2 == 1) {
-            s = s1[0];
-        }
-        return dna.DNA(s);
-    }
-
     public static String[] combineArrays(String[] array1, String[] array2) {
         String[] combinedArray = new String[array1.length + array2.length];
         System.arraycopy(array1, 0, combinedArray, 0, array1.length);
@@ -1186,7 +1221,7 @@ public class apanel {
     /**
      * @param regions annotation of the exon pairs, for the panel map; null for FASTA
      */
-    private static void RunSingleplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3, List<ExonPromoterExtractor.Region> regions, SeparatePcr.Settings separate) throws IOException {
+    private static void RunSingleplexPanelDesign(LongIntHashMap map, String tagfile, String outpath, String seq, String name, String refsequence, String fastaseq, Boolean homology, String[] listprimers, int[] exons, int minpcr, int maxpcr, int minlen, int maxlen, int mintm, int maxtm, int minlc, int prlap, String ftail, String rtail, String e5, String e3, List<ExonPromoterExtractor.Region> regions, SeparatePcr.Settings separate, List<Pair> existingPairs) throws IOException {
         Path in = Paths.get(tagfile);
         String stem = fileStem(in);
         //String stem = fileStem(in).replaceFirst("\\.[0-9]+$", "");  // NG_029916.1
@@ -1247,7 +1282,9 @@ public class apanel {
             PanelsCollector panels = new PanelsCollector(pcrcol, pd.getAllPairs());
             panels.setRegionNames(List.of(names));
             panels.setSearchMaps(List.of(pd.getSearchMap()));
+            panels.setExisting(existingPairs);
             panels.CombinePairsPanel(cexons, 1);
+            sr1.append(existingSection(existingPairs));
             List<Pair> pcrpanel = panels.getPanel1();
 
             if (!pcrpanel.isEmpty()) {
@@ -1275,8 +1312,9 @@ public class apanel {
                 System.out.println(notes);
             }
 
-            if (!pcrpanel.isEmpty()) {
+            if (!pcrpanel.isEmpty() || !existingPairs.isEmpty()) {
                 CoverageReport cov = new CoverageReport(cexons, regions);
+                addExistingPool(cov, existingPairs);
                 List<int[]> iv = new ArrayList<>();
                 for (Pair pcrx : pcrpanel) {
                     iv.add(CoverageReport.insert(pcrx));
@@ -1348,8 +1386,8 @@ public class apanel {
                 }
             }
 */
-            PanelPlot plot = new PanelPlot(name, seq.length(), cexons, exons, regions, pd.getWidenedFlanks(), List.of(pcrpanel), false, pd.getSearchMap(), maxpcr);
-            if (!pcrcol.isEmpty()) {
+            PanelPlot plot = new PanelPlot(name, seq.length(), cexons, exons, regions, pd.getWidenedFlanks(), List.of(pcrpanel), existingPairs, false, pd.getSearchMap(), maxpcr);
+            if (!pcrcol.isEmpty() || !existingPairs.isEmpty()) {
                 try (FileWriter fileWriter = new FileWriter(pcrcolfile.toFile())) {
                     System.out.println("Saving PCR primers combinations report to a file: " + pcrcolfile);
                     fileWriter.write(sr1.toString());
