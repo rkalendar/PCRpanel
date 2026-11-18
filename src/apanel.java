@@ -207,7 +207,7 @@ public class apanel {
             /* out */ String[] primerFileHolder) throws Exception {
         PrimerConfig cfg = new PrimerConfig();
 
-        // NEW: собираем папки во временные списки — раскроем после того, как узнаем маски
+        // NEW: We’re adding folders to temporary lists — we’ll expand them once we know the masks
         List<String> tagFolders = new ArrayList<>();
         List<String> genomeFolders = new ArrayList<>();
 
@@ -225,7 +225,7 @@ public class apanel {
                 if (folderPath != null) {
                     String s = cline.substring(cline.indexOf("folder_path=") + "folder_path=".length()).trim();
                     System.out.println("Target_Folder_path=" + s);
-                    tagFolders.add(s);                                  // CHANGED: было BatchReadFiles здесь
+                    tagFolders.add(s);                                 
                 }
 
                 Path genomePath = validatePath(cline, "genome_path=", true, false, cfg.errors);
@@ -254,7 +254,7 @@ public class apanel {
                     reffiles.add(refFile.toString());
                 }
 
-                // NEW: маски файлов
+                // NEW: file masks
                 if (line.startsWith("target_mask=") || line.startsWith("folder_mask=")) {
                     cfg.tagMasks = splitMasks(valueAfterEquals(line));
                     System.out.println("Target_mask=" + String.join(",", cfg.tagMasks));
@@ -263,7 +263,7 @@ public class apanel {
                     cfg.genomeMasks = splitMasks(valueAfterEquals(line));
                     System.out.println("Genome_mask=" + String.join(",", cfg.genomeMasks));
                 }
-                // Опционально: общая маска, если пользователь хочет одну на всё
+                // Optional: a general mask, if the user wants just one for everything
                 if (line.startsWith("file_mask=")) {
                     String[] m = splitMasks(valueAfterEquals(line));
                     cfg.tagMasks = m;
@@ -354,7 +354,7 @@ public class apanel {
             System.err.println("Error reading config file '" + infile + "': " + e.getMessage());
         }
 
-        // NEW: раскрываем папки уже с учётом масок
+        // NEW: We expand the folders, taking the masks into account
         BatchReadFiles brf = new BatchReadFiles();
         for (String folder : tagFolders) {
             int matched = 0;
